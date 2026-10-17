@@ -25,6 +25,7 @@ fs.writeFileSync(
  define('DB_PASS','');
  if (!defined('DB_AUTO_MIGRATE')) { define('DB_AUTO_MIGRATE',true); }
  define('CLOUDHUB_CORE_ENABLED',true);
+ if (!defined('CLOUDHUB_ADMIN_CC_ENABLED')) define('CLOUDHUB_ADMIN_CC_ENABLED',true);
  define('CLOUDHUB_INGEST_ENABLED',true);
  define('CLOUDHUB_INGEST_KEYS',['test'=>${php(ingestKey)}]);
  define('STORAGE_PATH',${php(runtime + "/storage")});

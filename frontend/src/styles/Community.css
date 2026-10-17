@@ -1,0 +1,61 @@
+.ch-community-page { min-height:100vh; background:var(--ch-bg,#0b0e14); color:#e7eaf0; }
+.ch-community-header { display:flex; align-items:center; gap:24px; max-width:1440px; padding:24px 32px; margin:auto; border-bottom:1px solid #ffffff12; flex-wrap:wrap; }
+.ch-community-header > :first-child { margin-right:auto; }
+.ch-community-header a { color:#b9c3d1; text-decoration:none; font-size:14px; }
+.ch-community-nav { display:flex; gap:8px; flex-wrap:wrap; padding:16px 0; }
+.ch-community-page > .ch-community-nav { max-width:1376px; margin:auto; padding:16px 32px; }
+.ch-community-nav a { display:block; color:#aeb9c9; padding:10px 14px; border-radius:8px; text-decoration:none; font-size:14px; }
+.ch-community-nav a:hover,.ch-community-nav a.active { color:#fff; background:#7897ff20; }
+.ch-sidebar .ch-community-nav { padding:6px 0; gap:0; flex-direction:column; }
+.ch-community-main { max-width:1376px; padding:28px 32px 64px; margin:auto; }
+.ch-community-heading { margin-bottom:32px; }
+.ch-community-heading h1 { font-size:clamp(30px,4vw,48px); letter-spacing:-1.8px; margin:12px 0; }
+.ch-community-heading h1 span { color:#9cbbff; }
+.ch-community-heading p,.ch-community-note { color:#a1adbf; line-height:1.7; }
+.ch-community-note { font-size:12px; margin-top:24px; max-width:850px; }
+.ch-community-page button,.ch-community-page input,.ch-community-page select,.ch-community-page textarea { font:inherit; color:inherit; border:1px solid #ffffff20; background:#171e2a; border-radius:8px; padding:11px 14px; min-height:44px; }
+.ch-community-page button { cursor:pointer; background:#263d65; font-size:14px; font-weight:600; }
+.ch-community-page button:hover:not(:disabled) { background:#36568a; }
+.ch-community-page button:disabled { opacity:.45; cursor:default; }
+.ch-community-page :focus-visible { outline:2px solid #a7c5ff; outline-offset:3px; }
+.ch-community-page input,.ch-community-page textarea { background:#0e141e; min-width:0; }
+.ch-community-page label { display:flex; flex-direction:column; gap:9px; font-size:13px; color:#b8c4d7; }
+.ch-community-filters { display:flex; flex-wrap:wrap; align-items:end; gap:16px; padding:22px; border:1px solid #ffffff12; border-radius:12px; background:#121923; margin-bottom:24px; }
+.ch-community-filters form { flex:1; min-width:220px; }
+.ch-community-filters form > div { display:flex; gap:8px; margin-top:9px; }
+.ch-community-filters input { width:100%; }
+.ch-community-table-wrap { overflow:auto; border:1px solid #ffffff15; border-radius:12px; }
+.ch-community-table { width:100%; border-collapse:collapse; text-align:left; font-variant-numeric:tabular-nums; font-size:14px; }
+.ch-community-table th { padding:16px; background:#141c28; font-size:11px; text-transform:uppercase; letter-spacing:.8px; color:#9fadc2; white-space:nowrap; }
+.ch-community-table td { padding:18px 16px; border-top:1px solid #ffffff0d; white-space:nowrap; }
+.ch-community-table tr.is-current-player { background:#87b5ff0c; box-shadow:inset 3px 0 #8ab5ff; }
+.ch-player-link { display:flex; align-items:center; gap:12px; color:#f1f4fa; text-decoration:none; font-weight:650; }
+.ch-player-link img { width:38px; height:38px; border-radius:9px; object-fit:cover; }
+.ch-player-link small { margin-left:8px; color:#a7c5ff; font-weight:400; }
+.ch-badges { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+.ch-badge { display:inline-flex; align-items:center; padding:4px 8px; border-radius:5px; border:1px solid #ffffff20; font-size:10px; font-weight:750; letter-spacing:.5px; text-transform:uppercase; color:#b8c9e6; }
+.ch-badge--owner { color:#ffe4a3; background:#b8942515; border-color:#c7a34c50; }
+.ch-badge--admin,.ch-badge--moderator { color:#c4b5fd; }
+.ch-badge--top { color:#e1c77b; }
+.ch-rank--bronze { color:#dcaa7d; }.ch-rank--silver { color:#d3d8e0; }.ch-rank--gold { color:#f2d773; }.ch-rank--platinum { color:#8ee3da; }.ch-rank--diamond { color:#8fc7ff; }.ch-rank--master { color:#c7a9ff; }
+.ch-community-pager { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; padding:20px 0; color:#9fadc2; font-size:13px; }
+.ch-community-state { text-align:center; border:1px dashed #ffffff20; border-radius:12px; padding:56px 24px; margin:16px 0; color:#aebcd0; }
+.ch-community-state h2 { color:#edf2fb; font-size:22px; }
+.ch-community-state > span { font-size:38px; color:#9dbfff; }
+.ch-community-card { padding:24px; background:#121923; border:1px solid #ffffff12; border-radius:12px; margin-bottom:20px; }
+.ch-community-card h2 { font-size:20px; margin:0 0 18px; }.ch-community-card p { color:#abb8cc; line-height:1.65; }
+.ch-profile-hero { display:flex; align-items:center; gap:24px; padding:32px; background:linear-gradient(110deg,#1d2b42,#121923 75%); }
+.ch-profile-hero > img { width:100px; height:100px; border-radius:20px; }.ch-profile-hero h1 { font-size:32px; margin:8px 0; overflow-wrap:anywhere; }
+.ch-profile-hero code { color:#a2b3cc; font-size:12px; }.ch-profile-hero a { color:#a7c5ff; font-size:13px; display:inline-block; margin-top:16px; }
+.ch-profile-bio { white-space:pre-wrap; overflow-wrap:anywhere; }
+.ch-stat-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:20px; }
+.ch-stat-grid article { margin:0; }.ch-stat-grid span { display:block; color:#9dacc2; font-size:12px; }.ch-stat-grid strong { display:block; font-size:28px; margin-top:14px; font-variant-numeric:tabular-nums; }
+.ch-profile-edit { display:grid; gap:20px; max-width:800px; }.ch-profile-edit button { justify-self:start; }.ch-profile-edit p { margin:0; font-size:13px; }
+.ch-season-entry { display:flex; align-items:center; flex-wrap:wrap; gap:20px; padding:18px 0; border-top:1px solid #ffffff10; }.ch-season-entry > span { color:#9dacc2; font-size:13px; }.ch-season-entry .ch-badges { margin:0; }
+.ch-wallet-balance { background:linear-gradient(120deg,#243754,#131b27); }.ch-wallet-balance > span { color:#bac9df; font-size:14px; }.ch-wallet-balance > strong { display:block; font-size:clamp(32px,6vw,56px); margin-top:12px; }.ch-wallet-balance small { font-size:24px; color:#9ab6e2; }
+.ch-ledger-row { display:flex; justify-content:space-between; align-items:center; gap:24px; }.ch-ledger-row p { margin:8px 0; }.ch-ledger-row small { display:block; color:#8e9eb6; font-size:12px; margin-top:8px; }.ch-ledger-row > div:last-child { text-align:right; flex-shrink:0; }.ch-amount-credit { color:#9cdbbe; }.ch-amount-debit { color:#ffb0a8; }
+.ch-community-search { display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin-bottom:20px; }
+.ch-community-table td > button { display:block; margin-top:8px; }.ch-adjustment { display:grid; gap:16px; max-width:700px; }.ch-adjustment h2 { margin:0; }.ch-adjustment button { justify-self:start; }.ch-adjustment code { color:#a1b5d4; }
+.ch-audit-entry { padding:18px 0; border-bottom:1px solid #ffffff12; }.ch-audit-entry small { color:#9dacc2; overflow-wrap:anywhere; }.ch-audit-entry pre { white-space:pre-wrap; overflow-wrap:anywhere; font-size:12px; color:#92a8c6; }
+.ch-config-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; }.ch-config-grid dt { color:#a1b5d4; font-size:12px; }.ch-config-grid dd { margin:8px 0; }
+@media(max-width:700px) { .ch-community-header { padding:20px; gap:16px; }.ch-community-header > :first-child { width:100%; }.ch-community-page > .ch-community-nav { padding:12px; }.ch-community-nav a { padding:9px 10px; font-size:13px; }.ch-community-main { padding:20px 16px 40px; }.ch-community-filters { padding:16px; gap:14px; }.ch-community-filters > label { flex:1; min-width:120px; }.ch-community-filters form { flex-basis:100%; }.ch-stat-grid { grid-template-columns:repeat(2,1fr); gap:10px; }.ch-stat-grid article { padding:18px; }.ch-stat-grid strong { font-size:23px; }.ch-profile-hero { padding:22px; align-items:start; gap:16px; }.ch-profile-hero > img { width:64px; height:64px; border-radius:12px; }.ch-profile-hero h1 { font-size:24px; }.ch-community-card { padding:20px; }.ch-ledger-row { align-items:start; flex-direction:column; gap:12px; }.ch-ledger-row > div:last-child { text-align:left; }.ch-community-pager span { font-size:11px; } }

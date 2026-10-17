@@ -3,6 +3,7 @@ import { useUser } from './components/useUser'
 import Login from './components/Login'
 import Page from './pages/Page'
 import Download from './pages/Download'
+import Community from './pages/Community'
 import CookieConsent from './components/CookieConsent'
 import LoadingScreen from './components/LoadingScreen'
 import {
@@ -166,7 +167,14 @@ function SessionApp() {
 
   return (
       <div className="app-root">
-        {user ? <LoggedInRoutes user={user} /> : <Login />}
+        <Routes>
+          <Route path="/ranking" element={<Community user={user} mode="ranking" />} />
+          <Route path="/players" element={<Community user={user} mode="players" />} />
+          <Route path="/players/:steamid" element={<Community user={user} mode="profile" />} />
+          <Route path="/wallet" element={<Community user={user} mode="wallet" />} />
+          <Route path="/admin" element={<Community user={user} mode="admin" />} />
+          <Route path="*" element={user ? <LoggedInRoutes user={user} /> : <Login />} />
+        </Routes>
         <CookieConsent />
       </div>
   )

@@ -28,6 +28,8 @@ export default function Login() {
           <Brand />
         </a>
         <div>
+          <Link className="ch-nav-link" to="/ranking">Ranking</Link>
+          <Link className="ch-nav-link" to="/players">Profile</Link>
           <Link className="ch-download-link" to="/download"><Monitor size={16} aria-hidden="true" />{c.download}</Link>
           <a className="ch-nav-link" href="#experience">
             {c.help} <ArrowUpRight size={14} />
