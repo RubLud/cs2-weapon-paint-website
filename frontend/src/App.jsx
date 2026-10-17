@@ -171,6 +171,9 @@ function SessionApp() {
           <Route path="/ranking" element={<Community user={user} mode="ranking" />} />
           <Route path="/players" element={<Community user={user} mode="players" />} />
           <Route path="/players/:steamid" element={<Community user={user} mode="profile" />} />
+          <Route path="/friends" element={<Community user={user} mode="friends" />} />
+          <Route path="/notifications" element={<Community user={user} mode="notifications" />} />
+          <Route path="/moderation" element={<Community user={user} mode="moderation" />} />
           <Route path="/wallet" element={<Community user={user} mode="wallet" />} />
           <Route path="/admin" element={<Community user={user} mode="admin" />} />
           <Route path="*" element={user ? <LoggedInRoutes user={user} /> : <Login />} />

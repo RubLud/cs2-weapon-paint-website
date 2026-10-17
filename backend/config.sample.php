@@ -34,3 +34,6 @@ define('CLOUDHUB_INGEST_ENABLED', false);
 // Stage 3: enable only after explicit staging validation and least-privilege SQL grants.
 // OWNER identity is provisioned only with bin/cloudhub-owner.php after Steam verification.
 define('CLOUDHUB_ADMIN_CC_ENABLED', false);
+
+// Enable only after migration 003 on an approved staging environment.
+if (!defined('CLOUDHUB_SOCIAL_ENABLED')) define('CLOUDHUB_SOCIAL_ENABLED', false);
