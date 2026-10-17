@@ -30,3 +30,7 @@ define('CLOUDHUB_CORE_ENABLED', false);
 // Stage 2 remains off until isolated staging tests pass. Never put real keys here.
 define('CLOUDHUB_INGEST_ENABLED', false);
 // Define CLOUDHUB_INGEST_KEYS in a private ingestion-only config as server_id => random key (32+ bytes).
+
+// Stage 3: enable only after explicit staging validation and least-privilege SQL grants.
+// OWNER identity is provisioned only with bin/cloudhub-owner.php after Steam verification.
+define('CLOUDHUB_ADMIN_CC_ENABLED', false);

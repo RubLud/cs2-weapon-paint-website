@@ -28,3 +28,23 @@ test('Community API: public badges, profile privacy, edit ownership and CSRF',as
   expect((await communityPost(player,'community.php?action=edit',{...form,bio:'',profile_visibility:'public'})).status()).toBe(200);
   await anon.dispose(); await player.dispose();
 });
+test('OWNER API: authorization, CSRF, idempotency, balance and private ledger',async({playwright})=>{
+  const anon=await communityClient(playwright),player=await communityClient(playwright,1),owner=await communityClient(playwright,0);
+  expect((await anon.get('/api/admin.php')).status()).toBe(401);
+  for(const action of ['players','audit','config']) expect((await player.get('/api/admin.php?action='+action)).status()).toBe(403);
+  const form={steamid:'76561198000000002',amount:'7',reason:'API test',request_id:'20000000-0000-4000-8000-000000000001'};
+  expect((await communityPost(player,'admin.php?action=adjust',form)).status()).toBe(403);
+  expect((await owner.post('/api/admin.php?action=adjust',{form})).status()).toBe(403);
+  const token=(await (await owner.get('/api/session.php')).json()).csrf_token;
+  expect((await owner.post('/api/admin.php?action=adjust',{form,headers:{'X-CSRF-Token':token,Origin:'https://evil.example'}})).status()).toBe(403);
+  expect((await owner.get('/api/admin.php?action=adjust')).status()).toBe(405);
+  expect((await (await communityPost(owner,'admin.php?action=adjust',form)).json()).balance).toBe('7');
+  expect((await (await communityPost(owner,'admin.php?action=adjust',form)).json()).status).toBe('duplicate');
+  expect((await communityPost(owner,'admin.php?action=adjust',{...form,amount:'8'})).status()).toBe(409);
+  expect((await communityPost(owner,'admin.php?action=adjust',{...form,amount:'-8',request_id:'20000000-0000-4000-8000-000000000002'})).status()).toBe(409);
+  const ledger=await (await player.get('/api/cloudhub.php?action=history&steamid=76561198000000001')).json();
+  expect(ledger.transactions[0].amount).toBe('7');
+  expect((await (await owner.get('/api/admin.php?action=audit')).json()).entries[0].actor_steamid).toBe('76561198000000001');
+  expect((await communityPost(owner,'admin.php?action=adjust',{...form,amount:'-7',request_id:'20000000-0000-4000-8000-000000000003'})).status()).toBe(200);
+  await anon.dispose(); await player.dispose(); await owner.dispose();
+});
