@@ -10,6 +10,7 @@ require_once __DIR__ . '/../backend/class/Database.php';
 Database::getInstance()->getConnection();
 require __DIR__ . "/foundations.php";
 require __DIR__ . "/rounds.php";
+require __DIR__ . "/community.php";
 require_once __DIR__ . '/../backend/class/SessionBootstrap.php';
 foreach (['76561198000000001','76561198000000002'] as $index => $steamid) {
     session_save_path(wp_session_save_path());
