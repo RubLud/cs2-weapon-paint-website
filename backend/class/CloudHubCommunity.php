@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/CloudHubAccounts.php';
+require_once __DIR__ . '/CloudHubSocial.php';
 /** Public projections never select wallet, verification or moderation data. */
 final class CloudHubCommunity {
     public function __construct(private PDO $db) {}
@@ -37,11 +38,14 @@ final class CloudHubCommunity {
         foreach ($rows as &$row) $row['id']=(string)$row['id'];
         return $rows;
     }
-    public function leaderboard(?string $season, string $search, string $sort, int $limit, int $page, bool $admin=false): array {
+    public function leaderboard(?string $season, string $search, string $sort, int $limit, int $page, bool $admin=false, ?string $viewer=null): array {
         $sorts=['rp'=>'r.rp','kills'=>'r.kills','kd'=>'r.kills/GREATEST(r.deaths,1)','headshots'=>'r.headshots','win_rate'=>'r.rounds_won/NULLIF(r.rounds_played,0)'];
         if (!isset($sorts[$sort]) || !in_array($limit,[10,50,100],true) || $page<1 || $page>10000 || strlen($search)>128 || preg_match('//u',$search)!==1) throw new InvalidArgumentException('Invalid leaderboard parameters');
         [$ranked,$args]=$this->ranked($season);
         $where=$admin?'1=1':"f.profile_visibility='public'";
+        if (!$admin && $viewer!==null && CloudHubSocial::enabled()) {
+            $where.=" AND NOT EXISTS(SELECT 1 FROM cloudhub_blocks b WHERE (b.actor=? AND b.target=p.steamid) OR (b.target=? AND b.actor=p.steamid))"; $args[]=$viewer; $args[]=$viewer;
+        }
         if ($search!=='') { $where.=" AND (p.nickname LIKE ? ESCAPE '!' OR p.steamid=?)"; $args[]='%'.strtr($search,['!'=>'!!','%'=>'!%','_'=>'!_']).'%'; $args[]=$search; }
         $from=" FROM ($ranked) r JOIN cloudhub_players p USING(steamid) JOIN cloudhub_profiles f USING(steamid)";
         if ($admin) $from.=' JOIN cloudhub_wallets w USING(steamid)';
@@ -52,14 +56,17 @@ final class CloudHubCommunity {
     }
     public function profile(string $id, ?string $viewer): ?array {
         CloudHubAccounts::steamId($id);
-        $profile=$this->query('SELECT p.steamid,p.nickname,p.avatar_url,p.last_seen_at,f.bio,f.profile_visibility,f.activity_visibility FROM cloudhub_players p JOIN cloudhub_profiles f USING(steamid) WHERE p.steamid=?',[$id])->fetch(PDO::FETCH_ASSOC);
+        $profile=$this->query('SELECT p.steamid,p.nickname,p.avatar_url,p.last_seen_at,f.bio,f.profile_visibility,f.activity_visibility,f.theme,f.banner FROM cloudhub_players p JOIN cloudhub_profiles f USING(steamid) WHERE p.steamid=?',[$id])->fetch(PDO::FETCH_ASSOC);
         if (!$profile) return null;
         $own=$viewer===$id;
         $admin=$viewer!==null && in_array('OWNER',(new CloudHubAccounts($this->db))->roles($viewer),true);
-        if (!$own && $profile['profile_visibility']!=='public' && !$admin) return null;
+        $social=CloudHubSocial::enabled()?new CloudHubSocial($this->db):null;
+        if ($social && $social->blocked($viewer,$id)) return null;
+        $visible=$social?$social->allows($profile['profile_visibility'],$id,$viewer):($own || $profile['profile_visibility']==='public');
+        if (!$visible && !$admin) return null;
         // OWNER may inspect statistics but does not bypass private bio/activity.
-        if (!$own && $profile['profile_visibility']!=='public') $profile['bio']=null;
-        if (!$own && $profile['activity_visibility']!=='public') $profile['last_seen_at']=null;
+        if (!$visible) { $profile['bio']=null; $profile['theme']='cloudhub'; $profile['banner']='default'; }
+        if ($social ? !$social->allows($profile['activity_visibility'],$id,$viewer) : (!$own && $profile['activity_visibility']!=='public')) $profile['last_seen_at']=null;
         [$ranked,$args]=$this->ranked(null);
         $stats=$this->query("SELECT r.* FROM ($ranked) r WHERE steamid=?",[$id])->fetch(PDO::FETCH_ASSOC);
         $profile['stats']=$stats?$this->decorate([$stats])[0]:null;
@@ -67,10 +74,15 @@ final class CloudHubCommunity {
         // final_position is historical only when Core has explicitly recorded it.
         $profile['seasons']=$this->decorate($history);
         $profile['editable']=$own;
+        $profile['social_enabled']=CloudHubSocial::enabled();
         return $profile;
     }
     public function edit(string $actor, array $input): void {
         CloudHubAccounts::steamId($actor);
+        if (CloudHubSocial::enabled()) {
+            if (array_diff(array_keys($input),['bio','profile_visibility','activity_visibility'])) throw new InvalidArgumentException('Unsupported profile field');
+            (new CloudHubSocial($this->db))->mutate($actor,'settings',$input); return;
+        }
         if (array_diff(array_keys($input),['bio','profile_visibility','activity_visibility'])) throw new InvalidArgumentException('Unsupported profile field');
         $bio=$input['bio']??null;
         if (!is_string($bio) || preg_match('//u',$bio)!==1 || preg_match_all('/./us',$bio)>1000 || preg_match('/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/',$bio)) throw new InvalidArgumentException('Invalid bio (max 1000 characters)');
