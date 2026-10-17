@@ -21,7 +21,7 @@ foreach ($db->query("SHOW TABLES LIKE 'wp_%'")->fetchAll(PDO::FETCH_COLUMN) as $
 }
 CloudHubSchema::migrate($db, __DIR__ . '/../migrations');
 CloudHubSchema::migrate($db, __DIR__ . '/../migrations');
-$check((int)$db->query('SELECT COUNT(*) FROM cloudhub_schema_migrations')->fetchColumn() === 2,'Repeat migration must be idempotent');
+$check((int)$db->query('SELECT COUNT(*) FROM cloudhub_schema_migrations')->fetchColumn() === 3,'Repeat migration must be idempotent');
 foreach ($wpBefore as $table => $schema) { $check($schema === $db->query("SHOW CREATE TABLE `$table`")->fetch(PDO::FETCH_NUM)[1], 'WeaponPaints schema unchanged'); }
 $check($skinBefore === $db->query("SELECT * FROM wp_player_skins WHERE steamid='76561198000000099'")->fetch(PDO::FETCH_ASSOC),'Existing skin settings survive migration');
 $db->exec("DELETE FROM wp_player_skins WHERE steamid='76561198000000099'");

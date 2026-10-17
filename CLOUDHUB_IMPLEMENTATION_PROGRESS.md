@@ -1,6 +1,19 @@
 # CloudHub — postęp implementacji
 
-## Aktualny etap — Etap 3 (17 października 2026)
+## Aktualny etap — Etap 4: społeczność (17 października 2026)
+
+Gałąź `cloudhub-stage4-social`, baza aktualnego `master` `783223b9` po potwierdzonym scaleniu PR #5. Zaimplementowano znajomych/zaproszenia/blokady, komentarze i zgłoszenia, prywatność friends, wbudowane motywy i nagłówki, powiadomienia oraz moderację według istniejącego `moderation.manage`. Zachowano Core, WeaponPaints, role/rangi/TOP, sezony i korekty CC.
+
+- Addytywna migracja `003_cloudhub_social.sql`: ustawienia społecznościowe, relacje, blokady, komentarze, zgłoszenia, powiadomienia, liczniki limitów. Stare ustawienia prywatności i wyłączone komentarze zachowane.
+- `CLOUDHUB_SOCIAL_ENABLED=false` domyślnie; włączenie dopiero po migracji i weryfikacji osobnego stagingu. Bez produkcyjnych operacji i Merge.
+- Nowe `social.php`, `CloudHubSocial`, komponenty React i strony `/friends`, `/notifications`, `/moderation`; integracja z profilem, nawigacją i panelem OWNER.
+- Transakcje i wspólna blokada zapisów społeczności; blokada usuwa relację, odblokowanie jej nie odtwarza. Backend egzekwuje prywatność, CSRF, role, whitelisty pól, limity i audyt. Brak zmian rzeczywistych ról, sald lub sekretów.
+- Zweryfikowano 202 asercje PHP (w tym 68 nowych), 21/21 testów API/UI, lint/build, składnię PHP, `git diff --check` i lokalną kopię Nginx. Bez testów rzeczywistego Steam, PHP 8.5 i obciążenia produkcyjnego. C# bez zmian.
+- Dokumentacja: [COMMUNITY_STAGE4.pl.md](docs/COMMUNITY_STAGE4.pl.md), [raport testów](docs/COMMUNITY_STAGE4_TEST_REPORT.md). Zawierają endpointy, uprawnienia, staging, rollback i granice weryfikacji.
+- Do osobnej oceny: przepustowość globalnej blokady i retencja danych. Etap 4 przygotowany do przeglądu jako domyślnie wyłączona funkcja. Właściciel decyduje o Merge.
+- Następny zakres, niewykonany: Etap 5 — sklep Cloud Coins i zatwierdzona ekonomia zakupów. Własność/WeaponPaints, CS2UIKit, wdrożenia pluginów i Desktop nadal w kolejnych etapach.
+
+## Etap 3 — zachowany zakres (17 października 2026)
 
 Zaimplementowano profile, ranking WWW, niezależne odznaki ról/rang/TOP, prywatny portfel i panel OWNER na `cloudhub-stage3-profiles`, od aktualnego master `8fe59c8`. Etapy 1–2 pozostają zachowane; nie odtwarzano Core. Dokumentacja: [COMMUNITY_STAGE3.pl.md](docs/COMMUNITY_STAGE3.pl.md), wyniki: [COMMUNITY_STAGE3_TEST_REPORT.md](docs/COMMUNITY_STAGE3_TEST_REPORT.md).
 

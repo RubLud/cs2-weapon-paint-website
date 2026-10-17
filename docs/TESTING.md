@@ -59,3 +59,10 @@ C# tests: `dotnet run --project server/CloudHub.Core.Tests -c Release -- tests/p
 The same `pnpm test` command now runs 134 PHP assertions (foundations, rounds, community, admin) and 19 API/browser tests. The harness enables CC adjustments only in its generated disposable configuration. No production configuration is read. `tests/admin-worker.php` is CLI-only test support outside the public release; independent workers verify concurrent idempotency and balance locking. An injected audit trigger failure verifies full rollback. Browser tests cover a committed operation with a lost response and reload/retry using the same UUID.
 
 Reports and manual staging/OWNER instructions: [COMMUNITY_STAGE3_TEST_REPORT.md](COMMUNITY_STAGE3_TEST_REPORT.md), [COMMUNITY_STAGE3.pl.md](COMMUNITY_STAGE3.pl.md). No new migration is needed for Stage 3. The production sample leaves `CLOUDHUB_ADMIN_CC_ENABLED=false`.
+
+
+## Etap 4 — społeczność
+
+Pełne `pnpm test` uruchamia także `tests/social.php` (68 asercji) i `tests/social.spec.js`. Wymaga tej samej izolowanej MariaDB przez socket. Migracja 003 wykonywana wyłącznie w losowej bazie harnessu; flaga społeczności jest włączona w konfiguracji testowej. Dotychczasowe serwisowe testy PHP sprawdzają również fallback z wyłączoną flagą, a API/UI działają z nią włączoną.
+
+Testy obejmują rzeczywiste równoległe procesy, rollback audytu, prywatność, role/granty, CSRF/XSS/IDOR, limity, paginację i interfejs mobilny. Raport wyników: [COMMUNITY_STAGE4_TEST_REPORT.md](COMMUNITY_STAGE4_TEST_REPORT.md). Procedura ręcznej weryfikacji stagingu i rollback: [COMMUNITY_STAGE4.pl.md](COMMUNITY_STAGE4.pl.md). Nie uruchamiać harnessu na bazie produkcyjnej.
