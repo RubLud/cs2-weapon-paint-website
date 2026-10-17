@@ -1,6 +1,23 @@
 # CloudHub — postęp implementacji
 
-## Aktualny etap
+## Aktualny etap — Etap 3 (17 października 2026)
+
+Zaimplementowano profile, ranking WWW, niezależne odznaki ról/rang/TOP, prywatny portfel i panel OWNER na `cloudhub-stage3-profiles`, od aktualnego master `8fe59c8`. Etapy 1–2 pozostają zachowane; nie odtwarzano Core. Dokumentacja: [COMMUNITY_STAGE3.pl.md](docs/COMMUNITY_STAGE3.pl.md), wyniki: [COMMUNITY_STAGE3_TEST_REPORT.md](docs/COMMUNITY_STAGE3_TEST_REPORT.md).
+
+- Publiczne profile SteamID64 i edycja wyłącznie własnego opisu/prywatności; statystyki globalne i historia sezonów.
+- Ranking globalny/sezonowy, TOP 10/50/100 z paginacją, wyszukiwaniem i sortowaniem; deterministyczny remis RP → kills → SteamID.
+- Oddzielne odznaki OWNER/ADMIN/MODERATOR, Bronze–Master i TOP. Profil prywatny znika z publicznej wyszukiwarki, zachowując rzeczywiste pozycje pozostałych osób.
+- Prywatne saldo, historia transakcji i nagrody z istniejącej księgi Etapu 2.
+- OWNER: wyszukiwanie graczy, statystyki, salda, atomowe korekty CC z powodem, CSRF, idempotencją, audytem i blokadą ujemnego salda. UI zachowuje niepotwierdzoną operację po odświeżeniu karty.
+- Progi rang i punktacja dostępne tylko do odczytu; edycja WWW wyłączona do opracowania wersjonowania reguł i ich aktywacji.
+- Nie jest potrzebna nowa migracja. Nie zmieniano migracji 001/002, danych produkcji, konfiguratora ani pluginów. Bez wdrożenia i bez automatycznego merge.
+- `CLOUDHUB_ADMIN_CC_ENABLED=false` domyślnie. SteamID rzeczywistego właściciela nie jest znany; nie nadano mu roli. Udokumentowano istniejący bootstrap CLI po zweryfikowanym logowaniu Steam.
+- Weryfikacja: **134 asercje PHP, 19 testów API/UI**, frontend lint/build, PHP lint i lokalny Nginx syntax PASS. Nie testowano produkcyjnego obciążenia, PHP 8.5 ani prawdziwego logowania Steam.
+- Moduły zapisane i wypchnięte kolejno: `a85cdb3` profile/ranking, `e4b2a90` OWNER/CC, `7b0864a` interfejs i regresja; osobny commit dokumentacji.
+
+Kolejne etapy według aktualnego zlecenia: 4 — znajomi/komentarze, 5 — sklep CC, 6 — egzekwowanie własności WeaponPaints, 7 — CS2UIKit, 8 — osobno zatwierdzone wdrożenie pluginu, 9 — Windows. Poniższe sekcje zachowują historię wcześniejszego planu; ich dawna numeracja nie rozszerza zakresu Etapu 3.
+
+## Historia — Etap 1
 
 Etap 1: audyt i fundamenty, gałąź `cloudhub-foundations`, na bazie połączonego PR #1 (`6b7e432`). Oryginalna wersja CloudHub CS2 (`f02bbf1`) jest zachowana. Pełne wymagania: [docs/CLOUDHUB_REQUIREMENTS.pl.md](docs/CLOUDHUB_REQUIREMENTS.pl.md).
 

@@ -52,3 +52,10 @@ Actual Steam acceptance and in-game synchronization cannot be proven with synthe
 The automatic Codex preparation script does not start a database or migrate SQL. `scripts/start-test-db.sh` is a separate, manual test helper: creates only the isolated MariaDB system tables under `/workspace/.cloud-tools/test-mysql` and runs it with `--skip-networking`, `--no-defaults` and its own Unix socket. It never reads app config or production DB variables. Keep it running in another terminal while invoking `pnpm test`. Stop that process with Ctrl-C after tests. The integration harness itself only migrates and drops its own random `cloudhub_test_*` schema; the socket must be under `/workspace`.
 
 C# tests: `dotnet run --project server/CloudHub.Core.Tests -c Release -- tests/protocol-vector.json` from the root after activating the tools. Plugin build: `dotnet build server/CloudHub.Plugin -c Release --no-restore`. The automatic setup restores existing projects in locked mode, never starts CS2 or loads the plugin. See [CORE_STAGE2.pl.md](CORE_STAGE2.pl.md) for rules, HMAC and staging/rollback boundaries.
+
+
+## Stage 3: community and OWNER
+
+The same `pnpm test` command now runs 134 PHP assertions (foundations, rounds, community, admin) and 19 API/browser tests. The harness enables CC adjustments only in its generated disposable configuration. No production configuration is read. `tests/admin-worker.php` is CLI-only test support outside the public release; independent workers verify concurrent idempotency and balance locking. An injected audit trigger failure verifies full rollback. Browser tests cover a committed operation with a lost response and reload/retry using the same UUID.
+
+Reports and manual staging/OWNER instructions: [COMMUNITY_STAGE3_TEST_REPORT.md](COMMUNITY_STAGE3_TEST_REPORT.md), [COMMUNITY_STAGE3.pl.md](COMMUNITY_STAGE3.pl.md). No new migration is needed for Stage 3. The production sample leaves `CLOUDHUB_ADMIN_CC_ENABLED=false`.
