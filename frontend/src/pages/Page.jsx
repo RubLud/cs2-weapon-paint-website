@@ -24,6 +24,7 @@ import { prefetchWeaponCatalogs } from "../lib/dataCache";
 import { CATEGORY_ORDER, CATEGORY_THUMB } from "../lib/weaponDisplay";
 import Brand from "../components/Brand";
 import SiteFooter from "../components/SiteFooter";
+import CommunityNav from "../components/CommunityNav";
 
 const CATEGORY_KEYS = {
   Loadout: "catLoadout",
@@ -161,6 +162,7 @@ export default function Page({ user, team, setTeam, category, setCategory }) {
             </button>
           ))}
           <p className="ch-nav-caption">{c.account}</p>
+          <CommunityNav user={user} />
           <button
             className={`ch-nav-item ${view === "profile" ? "is-active" : ""}`}
             onClick={() => {

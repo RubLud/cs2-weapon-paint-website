@@ -14,7 +14,7 @@ final class CloudHubCommunity {
     private function ranked(?string $season): array {
         if ($season===null) return ['SELECT s.*, ROW_NUMBER() OVER (ORDER BY rp DESC,kills DESC,steamid ASC) position FROM cloudhub_player_stats s',[]];
         self::positiveId($season);
-        return ['SELECT s.*, ROW_NUMBER() OVER (ORDER BY rp DESC,kills DESC,steamid ASC) position FROM cloudhub_player_season_stats s WHERE season_id=?',[$season]];
+        return ["SELECT s.*, ROW_NUMBER() OVER (ORDER BY rp DESC,kills DESC,steamid ASC) position FROM cloudhub_player_season_stats s WHERE season_id=? AND EXISTS (SELECT 1 FROM cloudhub_seasons c WHERE c.id=s.season_id AND c.status IN ('active','closed'))",[$season]];
     }
     private function decorate(array $rows): array {
         if (!$rows) return [];

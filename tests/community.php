@@ -30,5 +30,21 @@ try {
     $db->prepare('INSERT INTO cloudhub_player_season_stats(season_id,steamid,rp,final_position) VALUES (?,?,500,3)')->execute([$season,$one]);
     $check($community->leaderboard($season,'','rp',10,1)['players'][0]['rank']['rank_key']==='silver','Season ranking uses season RP');
     $check($community->profile($one,null)['seasons'][0]['final_position']==='3','Historical final position preserved');
+    $db->exec("UPDATE cloudhub_seasons SET status='planned' WHERE id=$season");
+    $check($community->leaderboard($season,'','rp',10,1)['players']===[],'Planned season results not public');
+    for ($i=0;$i<110;$i++) {
+        $id='76561198000001'.str_pad((string)$i,3,'0',STR_PAD_LEFT);
+        $db->prepare('INSERT INTO cloudhub_players(steamid,nickname) VALUES (?,?)')->execute([$id,'Pagination fixture']);
+        $db->prepare('INSERT INTO cloudhub_profiles(steamid) VALUES (?)')->execute([$id]);
+        $db->prepare('INSERT INTO cloudhub_player_stats(steamid,rp,kills,headshots,rounds_played,rounds_won) VALUES (?,100,2,1,10,4)')->execute([$id]);
+    }
+    foreach ([10,50,100] as $size) {
+        $first=$community->leaderboard(null,'Pagination fixture','rp',$size,1);
+        $second=$community->leaderboard(null,'Pagination fixture','rp',$size,2);
+        $check(count($first['players'])===$size && $first['total']===110,'Bounded real pagination '.$size);
+        $check(!array_intersect(array_column($first['players'],'steamid'),array_column($second['players'],'steamid')),'No duplicate pages '.$size);
+    }
+    foreach (['kills','headshots','kd','win_rate'] as $sort) $check(count($community->leaderboard(null,'Pagination fixture',$sort,10,1)['players'])===10,'Whitelisted sort '.$sort);
+
 } finally { $db->rollBack(); }
 fwrite(STDERR,'CloudHub community assertions passed: '.($n-$startChecks)."\n");

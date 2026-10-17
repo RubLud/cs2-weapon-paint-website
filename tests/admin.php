@@ -1,6 +1,10 @@
 <?php
 require_once __DIR__.'/../backend/class/CloudHubAdmin.php';
 $admin=new CloudHubAdmin($db); $startChecks=$n;
+$pipes=[];
+$proc=proc_open([PHP_BINARY,__DIR__.'/admin-worker.php','disabled'],[0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']],$pipes);
+fclose($pipes[0]); $disabledResult=stream_get_contents($pipes[1]); fclose($pipes[1]); fclose($pipes[2]);
+$check(proc_close($proc)===0 && $disabledResult==='disabled','CC feature flag fails closed for OWNER');
 $input=['steamid'=>$two,'amount'=>'25','reason'=>'Isolated test','request_id'=>'10000000-0000-4000-8000-000000000001'];
 $reject(fn()=>$admin->adjust($two,$input),'Player cannot mint coins');
 $db->exec("INSERT INTO cloudhub_player_roles(steamid,role) VALUES ('$two','ADMIN')");
