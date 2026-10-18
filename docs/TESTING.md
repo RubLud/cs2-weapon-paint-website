@@ -75,3 +75,11 @@ Na Windows bez WSL/Dockera harness nie działa, bo wymaga MariaDB przez unix soc
 ## Stage 6: WeaponPaints ownership
 
 `pnpm test` also runs `tests/ownership.php` after the shop tests, on the same disposable database. It covers activation conditions, the OWNER snapshot, legacy and purchased ownership rules and the read-only audit. The harness starts a third PHP backend on port 8084 with `CLOUDHUB_OWNERSHIP_ENFORCED` on, sharing the database and sessions. `tests/ownership.spec.js` calls it directly, and routes the browser's `/api` calls to it for the configurator test. A fourth backend on port 8085 has the flag on with the shop off and must behave like Stage 5. The PHP test also installs the database guard (triggers on `wp_player_skins/knife/gloves`), replays the WeaponPaints plugin's own SQL against it and removes it again. The main backend (8082) keeps enforcement off, so the other suites run unchanged. See [OWNERSHIP_STAGE6.pl.md](OWNERSHIP_STAGE6.pl.md).
+
+Stage 6B adds three test sets:
+
+- `tests/ownership-server.spec.js`: the signed server endpoint `/api/ownership.php`. It is off on 8082 and on for 8084 and 8085. Covers authentication, validation, reply signatures and the explicit not-enforced reply with the shop off.
+- `tests/ownership.php`: also covers `serverView()`.
+- C# runner in `server/` (no game server needed): reply parsing, fail-closed rules and the background service with an in-memory HTTP handler.
+
+The WeaponPaints fork has no test project of its own. `dotnet build -c Release` must pass, and its menu behaviour is checked on a test server.

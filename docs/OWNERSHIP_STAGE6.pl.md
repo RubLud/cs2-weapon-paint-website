@@ -152,6 +152,44 @@ Strażnik bazy działa dopiero w kroku 3. Dlatego gracz widzi wybrany przedmiot 
    - przed wdrożeniem test na serwerze testowym, nie produkcyjnym.
 5. **Warstwy pozostają:** API WWW (403) i strażnik bazy (triggery) działają niezależnie od forka. Gdy fork zawiedzie, w bazie i tak zostaje stan domyślny.
 
+### Etap 6B: implementacja lokalna (19.10.2026)
+
+Zrobione lokalnie, bez push i bez zmian na serwerze CS2. Wszystkie elementy są domyślnie wyłączone.
+
+- **Backend:** `POST /api/ownership.php`, tylko do odczytu.
+  - Uwierzytelnienie kluczem serwera z ingest (`CLOUDHUB_INGEST_KEYS`). Flaga `CLOUDHUB_OWNERSHIP_API_ENABLED` (domyślnie `false`).
+  - W `nginx.conf` endpoint zablokowany (404). Staging: blok w `nginx-ingest.conf`, izolowana pula ingest.
+  - Odpowiedź: posiadane przedmioty z zakupów i snapshotu, modele noży i rękawic, ceny z bazy. Każdy pytany gracz dostaje wpis.
+  - „Nie egzekwowane” to zawsze jawna odpowiedź. Odpowiedzi są podpisane prefiksem `r1`, więc nigdy nie przejdą jako żądanie.
+- **Kontrakt** `server/CloudHub.Ownership.Contracts` (MIT): `ICloudHubOwnership`, capability `cloudhub:ownership`.
+  - Statusy `Free`, `Owned`, `Locked` (z ceną CC) i `Pending`.
+  - Sprawdzone w CounterStrikeSharp 1.0.376 (refleksja nad DLL): `Capabilities.RegisterPluginCapability`, `PluginCapability<T>.Get()` oraz obsługa współdzielonych assembly (`SharedPath`, `LoadSharedLibraries`).
+- **CloudHub.Core:** protokół, reguły i serwis. Odpowiedzi z pamięci, bez blokowania wątku gry, jedna pętla w tle, do 64 graczy na żądanie.
+- **Plugin CloudHub 0.3.0:** `OwnershipEnabled` (domyślnie `false`) rejestruje capability i odświeża gracza po autoryzacji Steam.
+- **Fork WeaponPaints** (`D:\CloudHub\cs2-WeaponPaints-cloudhub`, gałąź `cloudhub-ownership`, lokalnie): opis zmian w `CLOUDHUB_PATCH.md`. Flaga `Additional.CloudHubOwnership` (domyślnie `false` = upstream).
+  - Menu pokazują wszystko. Nieposiadane przedmioty mają etykietę `🔒 nazwa - N CC`. Wybór takiej pozycji wyświetla tylko komunikat.
+  - Handlery sprawdzają własność przed jakąkolwiek zmianą w pamięci.
+  - `GiveRandomSkin` i `GiveRandomKnife` są wymuszone na `false`.
+
+**Zachowanie awaryjne (fail-closed):** płatne przedmioty pozostają zablokowane, gdy brakuje któregokolwiek elementu:
+
+- pluginu CloudHub, capability albo DLL kontraktu;
+- backendu, poprawnego podpisu albo danych gracza.
+
+Domyślne przedmioty działają zawsze. Posiadane przedmioty działają z ostatniej poprawnej odpowiedzi przez maksymalnie 6 godzin. „Nie egzekwowane” obowiązuje najwyżej 2 minuty od podpisanej odpowiedzi. Strażnik bazy działa niezależnie.
+
+**Licencje:**
+
+- WeaponPaints i CounterStrikeSharp: GPL-3.0. Zmiany w forku są oznaczone (`CloudHub modification`, README, `CLOUDHUB_PATCH.md`), a autorstwo upstream zachowane. Źródła forka muszą być dostępne razem z buildem.
+- Kontrakt: MIT, zgodny z GPL-3.0.
+- `MenuManagerApi.dll`: bez podanej licencji w repo upstream. Do sprawdzenia przed publikacją.
+
+**Przed wdrożeniem (osobna zgoda):**
+
+1. Potwierdzić wersję WeaponPaints na serwerze (`css_plugins list`, oczekiwane 3.3a / build-466).
+2. Sprawdzić na serwerze testowym katalog `shared/CloudHub.Ownership.Contracts/`.
+3. Przetestować tam scenariusze z `CLOUDHUB_PATCH.md`.
+
 ### Plan do czasu decyzji
 
 - Komendy `!skins`, `!knife` i `!gloves` na produkcji pozostają bez zmian (decyzja OWNER).

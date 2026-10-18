@@ -11,7 +11,7 @@ Nowa specyfikacja: [docs/CLOUDHUB_NOWA_PELNA_SPECYFIKACJA.md](docs/CLOUDHUB_NOWA
 | Profile, ranking, OWNER CC | GOTOWE | PR #5. Profil wymaga MVP, postępu rangi i osiągnięć (§6). |
 | Społeczność | GOTOWE, WYMAGA TESTÓW na stagingu | PR #6 + #7, CI zielone, czeka na zgodę na merge do master |
 | Sklep CC i ekwipunek (Etap 5) | GOTOWE, WYMAGA TESTÓW na stagingu | PR #8 (RubLud) do `cloudhub-stage4-social`, CI zielone (81 asercji sklepu, 49 cennika, 24/24 Playwright). Cennik testowy, sprzedaż niezatwierdzona. |
-| Własność w WeaponPaints (Etap 6) | CZĘŚCIOWO GOTOWE, WYMAGA TESTÓW na stagingu | PR #9 (RubLud) do `cloudhub-stage5-shop`, CI zielone: 407 asercji PHP, 28/28 Playwright. Migracja 005, kontrola zapisów WWW, strażnik bazy, snapshot stanu, audyt. Otwarte: natychmiastowe nałożenie skina z menu w grze. Szczegóły: [docs/OWNERSHIP_STAGE6.pl.md](docs/OWNERSHIP_STAGE6.pl.md). |
+| Własność w WeaponPaints (Etap 6) | CZĘŚCIOWO GOTOWE, WYMAGA TESTÓW na stagingu | PR #9 (RubLud) do `cloudhub-stage5-shop`, CI zielone: 407 asercji PHP, 28/28 Playwright. Migracja 005, kontrola zapisów WWW, strażnik bazy, snapshot stanu, audyt. Etap 6B lokalnie (bez push): endpoint serwerowy, kontrakt `cloudhub:ownership`, fork WeaponPaints z blokadą w menu. Wymaga CI i serwera testowego. Szczegóły: [docs/OWNERSHIP_STAGE6.pl.md](docs/OWNERSHIP_STAGE6.pl.md). |
 | Redesign | NIEZROBIONE | po sklepie i ekwipunku |
 | Logo | NIEZROBIONE | wymaga zatwierdzenia propozycji |
 | Stopka „Designed by RUB LUD” | NIEZROBIONE | licencja MIT sprawdzona: `LICENSE` zostaje, link wizualny może zniknąć |
@@ -37,7 +37,10 @@ Gałąź `cloudhub-stage6-ownership` z `cloudhub-stage5-shop` (`5258473`), PR #9
   - 407 asercji PHP na MariaDB: foundations 31, rounds 50, community 29, admin 24, social 90, shop-pricing 49, shop 81, ownership 53. Ownership obejmuje triggery sprawdzane prawdziwym SQL pluginu WeaponPaints.
   - Playwright 28/28, w tym 4 testy własności: API, UI, bezpieczeństwo, wyłączony sklep. Pozostałe 24 testy to regresja poprzednich etapów.
 - Pierwszy run (39160151104) wykrył wyścig w teście Shop UI z Etapu 5: spóźnione `Set-Cookie` przywracało poprzednią sesję. Poprawiony test, bez zmian w aplikacji.
-- Otwarte: menu w grze (`!skins`, `!knife`, `!gloves`) nakłada wybór natychmiast w pamięci pluginu. Strażnik bazy zatrzymuje zapis, ale gracz widzi skin do końca sesji. Plan: [docs/OWNERSHIP_STAGE6.pl.md](docs/OWNERSHIP_STAGE6.pl.md), sekcja o menu w grze.
+- Menu w grze (`!skins`, `!knife`, `!gloves`) w upstream nakłada wybór natychmiast w pamięci pluginu.
+- Etap 6B (19.10.2026, lokalne commity, bez push): fork WeaponPaints blokuje nieposiadane przedmioty przed nałożeniem i pokazuje 🔒 z ceną CC. Odpowiedzi daje plugin CloudHub przez capability `cloudhub:ownership`, a backend przez podpisany `/api/ownership.php`. Opis: [docs/OWNERSHIP_STAGE6.pl.md](docs/OWNERSHIP_STAGE6.pl.md), sekcja Etap 6B.
+  - Zweryfikowane lokalnie: 84 asercje C# (45 nowych), build pluginu CloudHub i forka WeaponPaints bez ostrzeżeń, `php -l`.
+  - Niezweryfikowane: nowe testy PHP i Playwright (wymagają CI, czyli push za zgodą) oraz zachowanie w grze (serwer testowy).
 
 ## Etap 5 — sklep Cloud Coins i ekwipunek (18 października 2026)
 
