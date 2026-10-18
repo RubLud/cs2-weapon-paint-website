@@ -283,7 +283,7 @@ test("CloudHub account: authentication, private wallet, session identity and no 
   expect(account.balance).toBe('0');
   expect(account.rp).toBe('0');
   expect(account.rank.rank_key).toBe('bronze');
-  expect(features).toEqual({ shop_purchases: false, ownership_enforcement: false });
+  expect(features).toEqual({ shop: true, shop_purchases: true, ownership_enforcement: false });
   await post(player, 'cloudhub.php', { action: 'grant_role', role: 'OWNER', balance: '5000' }, 405);
   const unchanged = await (await player.get('/api/cloudhub.php')).json();
   expect(unchanged.account).toEqual(account);

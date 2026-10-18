@@ -27,6 +27,8 @@ fs.writeFileSync(
  define('CLOUDHUB_CORE_ENABLED',true);
  if (!defined('CLOUDHUB_SOCIAL_ENABLED')) define('CLOUDHUB_SOCIAL_ENABLED',true);
  if (!defined('CLOUDHUB_ADMIN_CC_ENABLED')) define('CLOUDHUB_ADMIN_CC_ENABLED',true);
+ if (!defined('CLOUDHUB_SHOP_ENABLED')) define('CLOUDHUB_SHOP_ENABLED',true);
+ if (!defined('CLOUDHUB_SHOP_PURCHASES_ENABLED')) define('CLOUDHUB_SHOP_PURCHASES_ENABLED',true);
  define('CLOUDHUB_INGEST_ENABLED',true);
  define('CLOUDHUB_INGEST_KEYS',['test'=>${php(ingestKey)}]);
  define('STORAGE_PATH',${php(runtime + "/storage")});
@@ -51,6 +53,8 @@ const sessions = JSON.parse(
   }),
 );
 execFileSync("php", ["tests/social.php"], { env, stdio: "inherit" });
+execFileSync("php", ["tests/shop-pricing.php"], { env, stdio: "inherit" });
+execFileSync("php", ["tests/shop.php"], { env, stdio: "inherit" });
 // Exercise the public CLI entry point too; it must leave WeaponPaints intact.
 execFileSync("php", ["bin/cloudhub-migrate.php", "--apply"], { env, stdio: "inherit" });
 fs.mkdirSync(path.join(root, "test-results"), { recursive: true });

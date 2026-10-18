@@ -18,6 +18,7 @@ jobs:
       - run: pnpm lint
       - run: pnpm build
       - run: find backend bin tests -name '*.php' -print0 | xargs -0 -n1 php -l
+      - run: php tests/shop-pricing.php && php bin/cloudhub-shop-catalog.php --simulate
   integration:
     # Disposable MariaDB over a Unix socket only (no TCP), synthetic sessions, no secrets.
     runs-on: ubuntu-24.04
