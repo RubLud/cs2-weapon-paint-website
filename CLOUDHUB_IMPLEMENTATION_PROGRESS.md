@@ -1,5 +1,26 @@
 # CloudHub — postęp implementacji
 
+## Stan według nowej specyfikacji (18 października 2026)
+
+Nowa specyfikacja: [docs/CLOUDHUB_NOWA_PELNA_SPECYFIKACJA.md](docs/CLOUDHUB_NOWA_PELNA_SPECYFIKACJA.md). Połączenie ze starymi wymaganiami i rozstrzygnięcie sprzeczności: [docs/CLOUDHUB_REQUIREMENTS.pl.md](docs/CLOUDHUB_REQUIREMENTS.pl.md), sekcja „Aktualizacja wymagań”.
+
+| Obszar | Status | Uwagi |
+|---|---|---|
+| Fundamenty: Steam, konta, role, migracja 001 | GOTOWE | master, PR #1–#2 |
+| Core: RP, CC, rangi, antyfarm, HMAC, outbox C# | CZĘŚCIOWO GOTOWE | Brakuje MVP i przegranej rundy, komend w grze, CI dla `dotnet test`. Nagrody do ponownego balansu (§13.1). |
+| Profile, ranking, OWNER CC | GOTOWE | PR #5. Profil wymaga MVP, postępu rangi i osiągnięć (§6). |
+| Społeczność | GOTOWE, WYMAGA TESTÓW na stagingu | PR #6 + #7, CI zielone, czeka na zgodę na merge do master |
+| Sklep CC i ekwipunek (Etap 5) | W TOKU | gałąź `cloudhub-stage5-shop` |
+| Własność w WeaponPaints (Etap 6) | NIEZROBIONE | flaga `ownership_enforcement`, migracja posiadanych skinów, zgoda OWNER |
+| Redesign | NIEZROBIONE | po sklepie i ekwipunku |
+| Logo | NIEZROBIONE | wymaga zatwierdzenia propozycji |
+| Stopka „Designed by RUB LUD” | NIEZROBIONE | licencja MIT sprawdzona: `LICENSE` zostaje, link wizualny może zniknąć |
+| CloudHub Ranks (rozbudowa Core) | CZĘŚCIOWO GOTOWE | jw. |
+| Utrata rangi przy spadku RP | ZABLOKOWANE | decyzja właściciela |
+| Balans i symulacje RP/CC | NIEZROBIONE | wartości startowe z §13.1 do symulacji |
+| CS2UIKit | NIEZROBIONE | wymaga weryfikacji API |
+| CloudHub Desktop | NIEZROBIONE | zrobiona tylko podstrona `/download`; wymagana analiza Tauri/Electron/.NET |
+
 ## Aktualny etap — Etap 4: społeczność (17 października 2026)
 
 Gałąź `cloudhub-stage4-social`, baza aktualnego `master` `783223b9` po potwierdzonym scaleniu PR #5. Zaimplementowano znajomych/zaproszenia/blokady, komentarze i zgłoszenia, prywatność friends, wbudowane motywy i nagłówki, powiadomienia oraz moderację według istniejącego `moderation.manage`. Zachowano Core, WeaponPaints, role/rangi/TOP, sezony i korekty CC.

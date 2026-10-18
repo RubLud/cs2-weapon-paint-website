@@ -1,5 +1,74 @@
 # CLOUDHUB — KOMPLETNY PROJEKT: RANKING CS2, CLOUD COINS, SKLEP SKINÓW, PROFILE STEAM, SPOŁECZNOŚĆ, PANEL OWNER I GUI CS2UIKIT
 
+## Aktualizacja wymagań — 18 października 2026 (nadrzędna)
+
+Właściciel przekazał nowszą pełną specyfikację: [CLOUDHUB_NOWA_PELNA_SPECYFIKACJA.md](CLOUDHUB_NOWA_PELNA_SPECYFIKACJA.md). Zasada łączenia:
+- wymagania obu dokumentów obowiązują łącznie;
+- przy sprzeczności decyduje nowa specyfikacja;
+- szczegóły tego dokumentu, które nie są z nią sprzeczne (cennik §9, darmowa personalizacja §10, balans ekonomii §11, migracja skinów §12, CS2UIKit §18, baza §20, bezpieczeństwo §21), pozostają w mocy.
+
+Żadne z poniższych wymagań nie jest opcjonalne: logo, redesign, stopka „Designed by RUB LUD”, CloudHub Ranks, CS2UIKit (z zastrzeżeniem weryfikacji API), CloudHub Desktop.
+
+### Wymagania dodane przez nową specyfikację
+
+| Obszar | Wymaganie | Źródło |
+|---|---|---|
+| Logo | Autorskie logo CloudHub: wersja pełna i sygnet, warianty SVG i PNG, favicon. Ma dobrze wyglądać w ciemnym motywie i w małych rozmiarach, nadawać się na stronę i do aplikacji Windows. Nie może kopiować cudzych logotypów ani być gotową ikonką z biblioteki. **Przed wdrożeniem propozycja do zatwierdzenia przez właściciela.** | nowa §4.1 |
+| Redesign | Strona główna, header, nawigacja, stopka, logowanie, profile, rankingi, sklep, ekwipunek, konfigurator, panel admina, formularze, powiadomienia i widoki mobilne. Nowoczesny dark mode, typografia, animacje, dostępność, wydajność. Bez usuwania funkcji i bez fikcyjnych danych. | nowa §4.2 (rozszerza §19 „Wygląd”) |
+| Stopka | Treść: „© 2026 CloudHub. All rights reserved.” i „Designed by RUB LUD”. Widoczny link do pierwotnego autora (`SiteFooter.jsx`) usunąć, jeśli licencja pozwala. | nowa §4.3 |
+| Profil | Dodatkowo: postęp do następnej rangi, MVP, wygrane i przegrane rundy, osiągnięcia. Wyłącznie rzeczywiste dane. | nowa §6 (rozszerza §13) |
+| CloudHub Ranks | Plugin C#/CounterStrikeSharp nagradzający kill, wygraną rundę i MVP (RP+CC), karzący śmierć i przegraną rundę (tylko RP). Wymagane symulacje 8 typów graczy, komendy w grze (bez kolizji nazw), testy z §13.6. **Rozbudowa istniejącego CloudHub Core** (`server/CloudHub.Plugin`), bez drugiego mechanizmu nagród. | nowa §13 |
+| CS2UIKit | Profil, ranga, RP, CC, ranking, wybrane funkcje ekwipunku, informacje o nagrodach. Tylko funkcje potwierdzone w API. | nowa §14 (uzupełnia §18) |
+| CloudHub Desktop | Pełnoprawny klient Windows: logowanie Steam, panel, profil, statystyki, rankingi, znajomi, sklep, ekwipunek, konfigurator, powiadomienia, synchronizacja. **Przed implementacją analiza Tauri / Electron / .NET z uzasadnieniem.** Bez sekretów w aplikacji i bez bezpośredniego dostępu do bazy. Build, instrukcja, plan aktualizacji. Bez publikacji instalatora i aktualizacji bez zgody. | nowa §15 |
+| Raport etapu | Zmienione pliki, funkcje, testy i wyniki, znane problemy, link do PR, co pozostało, propozycja kolejnego etapu. | nowa §19 (uzupełnia §25) |
+
+### Sprzeczności — rozstrzygnięcia
+
+| Temat | Stary dokument | Nowa specyfikacja (obowiązuje) | Skutek |
+|---|---|---|---|
+| Wartości nagród | §4 i migracja 002: kill 10 RP / 2 CC, śmierć −2 RP, runda wygrana 5/2, brak MVP i przegranej | Startowo: kill +10/+3, wygrana +5/+2, MVP +8/+5, śmierć −3/0, przegrana −2/0. **Wartości do symulacji, nie ostateczny balans.** | Zmiana tylko przez nową migrację lub konfigurację, po symulacjach (§13.2). Migracji 002 nie edytować (checksum). |
+| CC za porażki | brak jednoznacznego zakazu | CC nigdy nie są odejmowane za śmierć ani przegraną | Wymaganie twarde. Kara RP w regułach dotyczy wyłącznie RP. |
+| Utrata rangi | — | Decyzja właściciela, nie zakładać automatycznie | **ZABLOKOWANE** do decyzji. Obecnie ranga wynika z bieżącego RP. |
+| Progi rang | Bronze 0 … Master 7500 (migracja 001) | Zachować istniejące; zmiana tylko z uzasadnieniem | Bez zmian. |
+| Nazwa roli | PLAYER | USER | Ta sama rola. Nazwa techniczna `player` zostaje, w UI może być „Użytkownik”. |
+| Kolejność etapów | §23: Etapy 1–7 | §18: 17 kroków (niżej) | Obowiązuje nowa kolejność. Ukończonych etapów nie powtarzać. |
+| Audyt przed programowaniem | §26 | §20 | Audyt wykonano 18.10.2026. Właściciel polecił go nie powtarzać i kontynuować Etap 5. |
+
+### Licencja i stopka (sprawdzone 18.10.2026)
+
+`LICENSE`: MIT, „Copyright (c) 2025 skullboypl”. Plik `NOTICE` nie istnieje.
+
+MIT wymaga zachowania informacji o prawach autorskich i licencji we wszystkich kopiach lub istotnych częściach oprogramowania. Nie wymaga widocznego linku w interfejsie.
+
+Wniosek:
+- widoczny link w stopce można zastąpić tekstem CloudHub/RUB LUD;
+- plik `LICENSE` z oryginalną notą pozostaje w repozytorium i w paczce wdrożeniowej;
+- „Designed by RUB LUD” dotyczy projektu i wyglądu CloudHub, nie przypisuje RUB LUD autorstwa bazowego kodu WeaponPaints Website.
+
+### Obowiązująca kolejność realizacji (nowa §18 na tle wykonanych etapów)
+
+Stan: Etapy 1–4 wykonane (PR #1–#7). PR #6 czeka na decyzję właściciela o scaleniu do master.
+
+1. Dokończenie brakujących funkcji strony: **Etap 5 — sklep CC i ekwipunek**, potem Etap 6 — egzekwowanie własności w WeaponPaints (osobny flag, migracja posiadanych skinów, zgoda OWNER) oraz uzupełnienie profilu (MVP, postęp rangi, osiągnięcia).
+2. Redesign strony.
+3. Nowe logo, najpierw propozycja do zatwierdzenia.
+4. Stopka i prawa autorskie.
+5. Testy strony, API i ekonomii, w tym job `dotnet test` w CI.
+6. CloudHub Ranks: rozbudowa Core o MVP, przegraną rundę i komendy.
+7. Balans RP/CC oraz symulacje, do zatwierdzenia.
+8. CS2UIKit.
+9. Testy integracji z serwerem CS2 (staging, za zgodą).
+10. Pozostałe funkcje platformy.
+11. Projekt i analiza technologii CloudHub Desktop.
+12. Implementacja Desktop.
+13. Testy końcowe, dokumentacja, przygotowanie wdrożenia.
+
+Uzasadnienie zmiany kolejności: sklep i ekwipunek to brakujące funkcje strony (krok 3 nowej §18). Redesign obejmuje widoki sklepu i ekwipunku, dlatego musi nastąpić po nich, a nie przed.
+
+Statusy w dokumentacji postępu: GOTOWE, CZĘŚCIOWO GOTOWE, NIEZROBIONE, ZABLOKOWANE, WYMAGA POPRAWY, WYMAGA TESTÓW.
+
+---
+
 ## TWOJA ROLA
 
 Jesteś głównym programistą i architektem full-stack projektu CloudHub.
