@@ -10,7 +10,7 @@ Nowa specyfikacja: [docs/CLOUDHUB_NOWA_PELNA_SPECYFIKACJA.md](docs/CLOUDHUB_NOWA
 | Core: RP, CC, rangi, antyfarm, HMAC, outbox C# | CZĘŚCIOWO GOTOWE | Brakuje MVP i przegranej rundy, komend w grze, CI dla `dotnet test`. Nagrody do ponownego balansu (§13.1). |
 | Profile, ranking, OWNER CC | GOTOWE | PR #5. Profil wymaga MVP, postępu rangi i osiągnięć (§6). |
 | Społeczność | GOTOWE, WYMAGA TESTÓW na stagingu | PR #6 + #7, CI zielone, czeka na zgodę na merge do master |
-| Sklep CC i ekwipunek (Etap 5) | W TOKU | gałąź `cloudhub-stage5-shop` |
+| Sklep CC i ekwipunek (Etap 5) | CZĘŚCIOWO GOTOWE, WYMAGA TESTÓW | Kod, migracja 004 i testy na gałęzi `cloudhub-stage5-shop` (lokalnie). Testy na bazie i UI czekają na CI. Cennik wymaga zatwierdzenia. |
 | Własność w WeaponPaints (Etap 6) | NIEZROBIONE | flaga `ownership_enforcement`, migracja posiadanych skinów, zgoda OWNER |
 | Redesign | NIEZROBIONE | po sklepie i ekwipunku |
 | Logo | NIEZROBIONE | wymaga zatwierdzenia propozycji |
@@ -21,7 +21,21 @@ Nowa specyfikacja: [docs/CLOUDHUB_NOWA_PELNA_SPECYFIKACJA.md](docs/CLOUDHUB_NOWA
 | CS2UIKit | NIEZROBIONE | wymaga weryfikacji API |
 | CloudHub Desktop | NIEZROBIONE | zrobiona tylko podstrona `/download`; wymagana analiza Tauri/Electron/.NET |
 
-## Aktualny etap — Etap 4: społeczność (17 października 2026)
+## Etap 5 — sklep Cloud Coins i ekwipunek (18 października 2026)
+
+Lokalna gałąź `cloudhub-stage5-shop` z `cloudhub-stage4-social` (`f22094b`). Bez push, merge, wdrożenia i migracji. Szczegóły: [docs/SHOP_STAGE5.pl.md](docs/SHOP_STAGE5.pl.md).
+
+- Migracja addytywna `004_cloudhub_shop.sql`: produkty, historia cen, zakupy, ekwipunek. `wp_*` bez zmian.
+- `shop.php` (katalog, ekwipunek, historia, zakup). Zakup to jedna transakcja: blokada portfela, cena z serwera, UUID, brak ujemnego salda, wpis w ledgerze z saldem przed i po.
+- OWNER w `admin.php`: lista produktów, edycja ceny i aktywności z powodem i historią, statystyki ekonomii.
+- UI: `/shop`, `/inventory`, sekcja „Sklep i ekonomia” w `/admin`, etykieta zakupu w portfelu.
+- Flagi `CLOUDHUB_SHOP_ENABLED` (podgląd) i `CLOUDHUB_SHOP_PURCHASES_ENABLED` (zakupy), obie domyślnie `false`. Personalizacja nadal 0 CC.
+- Egzekwowanie własności: NIEZROBIONE, Etap 6.
+- CLI `bin/cloudhub-shop-catalog.php`: propozycja 2126 produktów, wszystkie nieaktywne do zatwierdzenia, oraz symulacja zarobków. Wniosek: `hourly_cc_cap=100` wyrównuje CC wszystkich profili do ~66 na mecz. Decyzja o balansie należy do właściciela; wartości nie zostały zmienione.
+- Weryfikacja lokalna PASS: lint, build, `php -l` (52 pliki), 36 asercji pricing, `--simulate`, `git diff --check`.
+- Niezweryfikowane lokalnie: `tests/shop.php` (baza), `tests/shop.spec.js` (API/UI) oraz regresja całego `pnpm test`. Wymagają CI na Linuksie, czyli push za zgodą.
+
+## Etap 4 — społeczność (17 października 2026)
 
 Gałąź `cloudhub-stage4-social`, baza aktualnego `master` `783223b9` po potwierdzonym scaleniu PR #5. Zaimplementowano znajomych/zaproszenia/blokady, komentarze i zgłoszenia, prywatność friends, wbudowane motywy i nagłówki, powiadomienia oraz moderację według istniejącego `moderation.manage`. Zachowano Core, WeaponPaints, role/rangi/TOP, sezony i korekty CC.
 
