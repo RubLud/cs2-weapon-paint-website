@@ -151,6 +151,57 @@ final class CloudHubOwnership {
         foreach ($this->collect() as $steamid=>$rows) foreach ($rows as [$def,$paint,$origin]) if ($origin!=='loadout') $out[$steamid][]=[$def,$paint];
         return $out;
     }
+
+    /**
+     * Database guard: triggers on the WeaponPaints tables so every writer (this website, the plugin's in-game
+     * menus, manual SQL) can only store owned items. The CS2 server reads equipment from these tables.
+     * An unowned new choice is stored as the default instead of failing, so the plugin keeps working.
+     * Updates that keep the stored item (StatTrak counters, wear, seed) pass unchanged: nothing equipped is taken away.
+     * Single-statement triggers: CloudHubSchema splits files on ';' and these are created by the OWNER CLI, not a migration.
+     */
+    private const GUARD=['cloudhub_guard_skins_ins','cloudhub_guard_skins_upd','cloudhub_guard_knife_ins','cloudhub_guard_knife_upd','cloudhub_guard_gloves_ins','cloudhub_guard_gloves_upd'];
+    private static function guardSql(): array {
+        $id="CAST(NEW.steamid AS CHAR CHARACTER SET ascii) COLLATE ascii_bin";
+        $exact=fn($d,$p)=>"(EXISTS(SELECT 1 FROM cloudhub_legacy_ownership l WHERE l.steamid=$id AND l.weapon_defindex=$d AND l.paint_id=$p) OR EXISTS(SELECT 1 FROM cloudhub_player_inventory i JOIN cloudhub_shop_products p ON p.id=i.product_id WHERE i.steamid=$id AND p.weapon_defindex=$d AND p.paint_id=$p))";
+        $model=fn($d)=>"(EXISTS(SELECT 1 FROM cloudhub_legacy_ownership l WHERE l.steamid=$id AND l.weapon_defindex=$d) OR EXISTS(SELECT 1 FROM cloudhub_player_inventory i JOIN cloudhub_shop_products p ON p.id=i.product_id WHERE i.steamid=$id AND p.kind IN ('knife','glove') AND p.weapon_defindex=$d))";
+        $skin='NEW.weapon_paint_id=0 OR '.$exact('NEW.weapon_defindex','NEW.weapon_paint_id');
+        $knife="NEW.knife IN ('weapon_knife','weapon_knife_t') OR ".$model('(SELECT k.weapon_defindex FROM cloudhub_knife_models k WHERE k.name=NEW.knife)');
+        $glove='NEW.weapon_defindex=0 OR '.$model('NEW.weapon_defindex');
+        $same=fn(string $cols)=>'('.implode(' AND ',array_map(fn($c)=>"NEW.$c<=>OLD.$c",explode(',',$cols))).')';
+        return [
+            'cloudhub_guard_skins_ins'=>"BEFORE INSERT ON wp_player_skins FOR EACH ROW SET NEW.weapon_paint_id=IF($skin,NEW.weapon_paint_id,0)",
+            'cloudhub_guard_skins_upd'=>"BEFORE UPDATE ON wp_player_skins FOR EACH ROW SET NEW.weapon_paint_id=IF(".$same('steamid,weapon_defindex,weapon_paint_id')." OR $skin,NEW.weapon_paint_id,0)",
+            'cloudhub_guard_knife_ins'=>"BEFORE INSERT ON wp_player_knife FOR EACH ROW SET NEW.knife=IF($knife,NEW.knife,'weapon_knife')",
+            'cloudhub_guard_knife_upd'=>"BEFORE UPDATE ON wp_player_knife FOR EACH ROW SET NEW.knife=IF(".$same('steamid,knife')." OR $knife,NEW.knife,'weapon_knife')",
+            'cloudhub_guard_gloves_ins'=>"BEFORE INSERT ON wp_player_gloves FOR EACH ROW SET NEW.weapon_defindex=IF($glove,NEW.weapon_defindex,0)",
+            'cloudhub_guard_gloves_upd'=>"BEFORE UPDATE ON wp_player_gloves FOR EACH ROW SET NEW.weapon_defindex=IF(".$same('steamid,weapon_defindex')." OR $glove,NEW.weapon_defindex,0)",
+        ];
+    }
+    /** @return list<string> installed guard triggers */
+    public function guardTriggers(): array {
+        $s=$this->db->prepare('SELECT TRIGGER_NAME FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA=DATABASE() AND TRIGGER_NAME IN ('.implode(',',array_fill(0,count(self::GUARD),'?')).') ORDER BY TRIGGER_NAME');
+        $s->execute(self::GUARD);
+        return $s->fetchAll(PDO::FETCH_COLUMN);
+    }
+    /**
+     * CLI only. Requires active web enforcement, takes a fresh snapshot in the same run (so nothing equipped
+     * becomes unowned between snapshot and guard), then (re)creates the triggers. Repeatable.
+     */
+    public function installGuard(string $reason): array {
+        if (PHP_SAPI!=='cli') throw new LogicException('CLI only');
+        if (!self::enabled() || !CloudHubShop::active($this->db)) throw new RuntimeException('Enable CLOUDHUB_OWNERSHIP_ENFORCED and the shop first; the guard must not run without web enforcement');
+        $snapshot=$this->snapshot(true,$reason);
+        $ins=$this->db->prepare('INSERT INTO cloudhub_knife_models(name,weapon_defindex) VALUES (?,?) ON DUPLICATE KEY UPDATE weapon_defindex=VALUES(weapon_defindex)');
+        foreach (wp_catalog('weapons.json') as $w) if (($w['category'] ?? '')==='Knife' && is_int($w['cs2_id'] ?? null)) $ins->execute(['weapon_'.$w['name'],$w['cs2_id']]);
+        foreach (self::guardSql() as $name=>$sql) { $this->db->exec("DROP TRIGGER IF EXISTS $name"); $this->db->exec("CREATE TRIGGER $name $sql"); }
+        return ['snapshot'=>$snapshot,'triggers'=>$this->guardTriggers()];
+    }
+    /** CLI only. Removing the guard never changes stored equipment. */
+    public function removeGuard(): array {
+        if (PHP_SAPI!=='cli') throw new LogicException('CLI only');
+        foreach (self::GUARD as $name) $this->db->exec("DROP TRIGGER IF EXISTS $name");
+        return ['triggers'=>$this->guardTriggers()];
+    }
 }
 /** WeaponPaints endpoints: refuse the write with 403 before anything is stored. Rolls back and drops buffered output. */
 function wp_require_owned(PDO $db,string $steamid,array $items): void {

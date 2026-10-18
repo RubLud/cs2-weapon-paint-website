@@ -11,7 +11,7 @@ Nowa specyfikacja: [docs/CLOUDHUB_NOWA_PELNA_SPECYFIKACJA.md](docs/CLOUDHUB_NOWA
 | Profile, ranking, OWNER CC | GOTOWE | PR #5. Profil wymaga MVP, postępu rangi i osiągnięć (§6). |
 | Społeczność | GOTOWE, WYMAGA TESTÓW na stagingu | PR #6 + #7, CI zielone, czeka na zgodę na merge do master |
 | Sklep CC i ekwipunek (Etap 5) | GOTOWE, WYMAGA TESTÓW na stagingu | PR #8 (RubLud) do `cloudhub-stage4-social`, CI zielone (81 asercji sklepu, 49 cennika, 24/24 Playwright). Cennik testowy, sprzedaż niezatwierdzona. |
-| Własność w WeaponPaints (Etap 6) | CZĘŚCIOWO GOTOWE, WYMAGA TESTÓW | Gałąź `cloudhub-stage6-ownership` (lokalnie): migracja 005, kontrola zapisów WWW, snapshot stanu, audyt. Menu w grze wymagają zatwierdzonej zmiany konfiguracji pluginu. Szczegóły: [docs/OWNERSHIP_STAGE6.pl.md](docs/OWNERSHIP_STAGE6.pl.md). |
+| Własność w WeaponPaints (Etap 6) | CZĘŚCIOWO GOTOWE, WYMAGA TESTÓW | Gałąź `cloudhub-stage6-ownership` (lokalnie): migracja 005, kontrola zapisów WWW, strażnik bazy dla wyposażenia czytanego przez serwer CS2, snapshot stanu, audyt. Testy na bazie i Playwright czekają na CI. Szczegóły: [docs/OWNERSHIP_STAGE6.pl.md](docs/OWNERSHIP_STAGE6.pl.md). |
 | Redesign | NIEZROBIONE | po sklepie i ekwipunku |
 | Logo | NIEZROBIONE | wymaga zatwierdzenia propozycji |
 | Stopka „Designed by RUB LUD” | NIEZROBIONE | licencja MIT sprawdzona: `LICENSE` zostaje, link wizualny może zniknąć |
@@ -29,10 +29,11 @@ Lokalna gałąź `cloudhub-stage6-ownership` z `cloudhub-stage5-shop` (`5258473`
 - `CloudHubOwnership`: posiadanie z zakupu lub snapshotu. Darmowe są personalizacja, domyślne wykończenia, domyślny nóż i domyślne rękawice. Model noża lub rękawic odblokowuje posiadanie dowolnego ich wykończenia. Nieznane połączenia są odrzucane.
 - Kontrola w `skins.php` (`save`, `gloves_save`), `knife.php` (`set`), `loadouts.php` (`apply`). Odmowa `403 not_owned` bez zapisu.
 - Flaga `CLOUDHUB_OWNERSHIP_ENFORCED` (domyślnie `false`). Działa tylko z aktywnym sklepem, migracją 005 i snapshotem OWNER.
-- CLI `bin/cloudhub-ownership.php`: `--dry-run`, `--apply --reason`, `--audit` (tylko odczyt).
+- CLI `bin/cloudhub-ownership.php`: `--dry-run`, `--apply --reason`, `--audit` (tylko odczyt), `--guard=install|remove|status`.
+- Strażnik bazy: triggery na `wp_player_skins/knife/gloves`. Nowy wybór nieposiadanego przedmiotu z dowolnego źródła (menu w grze, SQL) zapisuje się jako domyślny. Aktualizacje bez zmiany przedmiotu (StatTrak) przechodzą. Instalacja wymaga aktywnego egzekwowania i robi świeży snapshot.
 - Sklep: przedmioty ze snapshotu jako „Posiadasz”, w ekwipunku, bez podwójnego zakupu. Konfigurator przy egzekwowaniu: „Kup: N CC” lub „Niedostępny”, podgląd bez zmian.
-- Plugin WeaponPaints (kod sprawdzony do odczytu): `!skins`, `!knife`, `!gloves` zapisują do bazy z pominięciem WWW. Rekomendacja: puste `CommandSkinSelection`, `CommandKnife`, `CommandGlove`. Wymaga zgody i weryfikacji wdrożonej wersji.
-- Weryfikacja lokalna PASS: lint, build, `php -l`, 49 asercji pricing, `git diff --check`. Niezweryfikowane lokalnie: `tests/ownership.php`, `tests/ownership.spec.js` i pełna regresja; wymagają CI.
+- Plugin WeaponPaints (kod sprawdzony do odczytu): `!skins`, `!knife`, `!gloves` zapisują do bazy z pominięciem WWW. Zapis blokuje strażnik bazy. Do końca sesji gracz widzi wybór w pamięci pluginu, więc rekomendacja: puste `CommandSkinSelection`, `CommandKnife`, `CommandGlove`. Wymaga zgody i weryfikacji wdrożonej wersji.
+- Weryfikacja lokalna PASS: lint, build, `php -l`, 49 asercji pricing, `git diff --check`. Niezweryfikowane lokalnie (brak MariaDB i `pdo_mysql` na Windows): `tests/ownership.php`, `tests/ownership.spec.js` (4 testy) i pełna regresja. Wymagają CI, czyli push za osobną zgodą.
 
 ## Etap 5 — sklep Cloud Coins i ekwipunek (18 października 2026)
 

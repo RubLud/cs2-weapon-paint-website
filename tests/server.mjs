@@ -43,6 +43,9 @@ fs.writeFileSync(disabledConfig, "<?php define('CLOUDHUB_CORE_ENABLED',true); de
 // Same database and sessions with Stage 6 ownership enforcement on; the main backend keeps it off.
 const enforcedConfig=path.join(runtime,"enforced.php");
 fs.writeFileSync(enforcedConfig, `<?php define('CLOUDHUB_OWNERSHIP_ENFORCED',true); require ${php(config)};`);
+// Enforcement flag on but the shop off: WeaponPaints must behave exactly as before.
+const shopOffConfig=path.join(runtime,"shop-off.php");
+fs.writeFileSync(shopOffConfig, `<?php define('CLOUDHUB_OWNERSHIP_ENFORCED',true); define('CLOUDHUB_SHOP_ENABLED',false); require ${php(config)};`);
 const env = {
   ...process.env,
   CLOUDHUB_CONFIG: config,
@@ -86,6 +89,7 @@ for (const [cmd, args] of [
   ["php", ["-S", "127.0.0.1:8082", "-t", "backend"]],
   ["php", ["-S", "127.0.0.1:8083", "-t", "backend"]],
   ["php", ["-S", "127.0.0.1:8084", "-t", "backend"]],
+  ["php", ["-S", "127.0.0.1:8085", "-t", "backend"]],
   [
     "node",
     [
@@ -99,7 +103,7 @@ for (const [cmd, args] of [
     ],
   ],
 ]) {
-  const child = spawn(cmd, args, { cwd: root, env: args.includes("127.0.0.1:8083") ? {...env,CLOUDHUB_CONFIG:disabledConfig} : args.includes("127.0.0.1:8084") ? {...env,CLOUDHUB_CONFIG:enforcedConfig} : env, stdio: "inherit" });
+  const child = spawn(cmd, args, { cwd: root, env: args.includes("127.0.0.1:8083") ? {...env,CLOUDHUB_CONFIG:disabledConfig} : args.includes("127.0.0.1:8084") ? {...env,CLOUDHUB_CONFIG:enforcedConfig} : args.includes("127.0.0.1:8085") ? {...env,CLOUDHUB_CONFIG:shopOffConfig} : env, stdio: "inherit" });
   children.push(child);
   child.on("exit", (code) => {
     if (!stopping) stop(code || 1);

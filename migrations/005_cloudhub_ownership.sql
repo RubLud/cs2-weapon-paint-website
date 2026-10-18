@@ -21,3 +21,8 @@ CREATE TABLE IF NOT EXISTS cloudhub_legacy_ownership (
  FOREIGN KEY (snapshot_id) REFERENCES cloudhub_ownership_snapshots(id),
  INDEX idx_legacy_item(weapon_defindex,paint_id)
 ) ENGINE=InnoDB;
+-- Knife names as WeaponPaints stores them, for the optional database guard. Filled by the OWNER CLI.
+CREATE TABLE IF NOT EXISTS cloudhub_knife_models (
+ name VARCHAR(64) NOT NULL PRIMARY KEY,
+ weapon_defindex INT UNSIGNED NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;

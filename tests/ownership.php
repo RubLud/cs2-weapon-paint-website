@@ -85,6 +85,63 @@ $hit=array_values(array_filter($audit['sample'],fn($r)=>$r['steamid']===$e));
 $check($audit['players']>=1 && $hit && $hit[0]['items']===[['weapon_defindex'=>4,'paint_id'=>(int)$glock['paint_id']]],'Audit reports unowned equipped item');
 $check($wpRows()===$before && $count('SELECT COUNT(*) FROM cloudhub_legacy_ownership')===$legacy,'Audit changes nothing');
 
+// Database guard: the CS2 plugin writes wp_* directly (in-game menus). Statements below are the plugin's own SQL
+// (Nereziel/cs2-WeaponPaints 6b1039d, WeaponSynchronization.cs) with its parameters.
+$f='76561198000000804'; // WeaponPaints-only player, nothing owned
+$db->exec("UPDATE cloudhub_schema_migrations SET version='004_hidden_for_test' WHERE version='004_cloudhub_shop.sql'");
+try { $own->installGuard('Guard test'); $check(false,'Guard installed without active shop'); }
+catch (RuntimeException) { $check($own->guardTriggers()===[],'Guard refuses to install while the shop is inactive'); }
+finally { $db->exec("UPDATE cloudhub_schema_migrations SET version='004_cloudhub_shop.sql' WHERE version='004_hidden_for_test'"); }
+$guard=$own->installGuard('Guard test');
+$check(count($guard['triggers'])===6 && $guard['snapshot']['applied'],'Guard installs six triggers after a fresh snapshot');
+$check(count($own->installGuard('Guard repeat')['triggers'])===6,'Guard install is repeatable');
+$pluginSkin=function($id,$team,$def,$paint)use($db){
+    $s=$db->prepare('SELECT COUNT(*) FROM `wp_player_skins` WHERE `steamid`=? AND `weapon_defindex`=? AND `weapon_team`=?'); $s->execute([$id,$def,$team]);
+    $q=(int)$s->fetchColumn()>0
+        ? 'UPDATE `wp_player_skins` SET `weapon_paint_id` = :paintId, `weapon_wear` = :wear, `weapon_seed` = :seed WHERE `steamid` = :steamid AND `weapon_defindex` = :weaponDefIndex AND `weapon_team` = :weaponTeam'
+        : 'INSERT INTO `wp_player_skins` (`steamid`, `weapon_defindex`, `weapon_team`, `weapon_paint_id`, `weapon_wear`, `weapon_seed`) VALUES (:steamid, :weaponDefIndex, :weaponTeam, :paintId, :wear, :seed)';
+    $db->prepare($q)->execute(['steamid'=>$id,'weaponDefIndex'=>$def,'weaponTeam'=>$team,'paintId'=>$paint,'wear'=>0.25,'seed'=>42]);
+};
+$pluginKnife=fn($id,$team,$knife)=>$db->prepare('INSERT INTO `wp_player_knife` (`steamid`, `weapon_team`, `knife`) VALUES(:steamid, :team, :newKnife) ON DUPLICATE KEY UPDATE `knife` = :newKnife2')->execute(['steamid'=>$id,'team'=>$team,'newKnife'=>$knife,'newKnife2'=>$knife]);
+$pluginGlove=fn($id,$team,$def)=>$db->prepare('INSERT INTO `wp_player_gloves` (`steamid`, `weapon_team`, `weapon_defindex`) VALUES(:steamid, :team, :gloveDefIndex) ON DUPLICATE KEY UPDATE `weapon_defindex` = :gloveDefIndex2')->execute(['steamid'=>$id,'team'=>$team,'gloveDefIndex'=>$def,'gloveDefIndex2'=>$def]);
+$paintOf=fn($id,$team,$def)=>$db->query("SELECT weapon_paint_id FROM wp_player_skins WHERE steamid='$id' AND weapon_team=$team AND weapon_defindex=$def")->fetchColumn();
+$knifeOf=fn($id,$team)=>$db->query("SELECT knife FROM wp_player_knife WHERE steamid='$id' AND weapon_team=$team")->fetchColumn();
+$gloveOf=fn($id,$team)=>$db->query("SELECT weapon_defindex FROM wp_player_gloves WHERE steamid='$id' AND weapon_team=$team")->fetchColumn();
+$pluginSkin($f,2,7,(int)$ak['paint_id']);
+$check((int)$paintOf($f,2,7)===0,'In-game pick of an unowned skin is stored as the default finish');
+$pluginSkin($e,3,7,(int)$ak['paint_id']);
+$check((int)$paintOf($e,3,7)===(int)$ak['paint_id'],'In-game pick of an owned skin is stored');
+$pluginSkin($e,3,7,99999);
+$check((int)$paintOf($e,3,7)===0,'Changing to an unowned finish via UPDATE is stored as the default');
+$pluginSkin($e,3,7,(int)$ak['paint_id']); $pluginSkin($e,3,7,(int)$ak['paint_id']);
+$check((int)$paintOf($e,3,7)===(int)$ak['paint_id'] && (float)$db->query("SELECT weapon_wear FROM wp_player_skins WHERE steamid='$e' AND weapon_team=3 AND weapon_defindex=7")->fetchColumn()===0.25,'Owned skin personalization through the plugin is free');
+$pluginKnife($f,2,'weapon_knife_karambit');
+$check($knifeOf($f,2)==='weapon_knife','Unowned knife model is stored as the default knife');
+$pluginKnife($f,2,'weapon_knife_t'); $check($knifeOf($f,2)==='weapon_knife_t','Default knives pass');
+$pluginKnife($f,3,'weapon_knife_not_real'); $check($knifeOf($f,3)==='weapon_knife','Unknown knife name is stored as the default knife');
+$pluginKnife($e,2,$knifeName); $check($knifeOf($e,2)===$knifeName,'Knife model of an owned finish passes (insert)');
+$other=$knifeName==='weapon_knife_karambit' ? 'weapon_bayonet' : 'weapon_knife_karambit';
+$pluginKnife($e,2,$other); $check($knifeOf($e,2)==='weapon_knife','Switching to an unowned knife via ON DUPLICATE KEY UPDATE is refused');
+$pluginGlove($f,3,(int)$glove['weapon_defindex']); $check((int)$gloveOf($f,3)===0,'Unowned glove model is stored as default gloves');
+$pluginGlove($e,3,(int)$glove['weapon_defindex']); $check((int)$gloveOf($e,3)===(int)$glove['weapon_defindex'],'Owned glove model passes');
+$pluginSkin($f,3,(int)$glove['weapon_defindex'],(int)$glove['paint_id']); $check((int)$paintOf($f,3,(int)$glove['weapon_defindex'])===0,'Unowned glove finish is stored as default');
+$db->prepare('INSERT INTO `wp_player_music` (`steamid`, `weapon_team`, `music_id`) VALUES(?, 2, 3) ON DUPLICATE KEY UPDATE `music_id` = 3')->execute([$f]);
+$check($count("SELECT COUNT(*) FROM wp_player_music WHERE steamid='$f' AND music_id=3")===1,'Music, agents and pins are not guarded');
+// Rows equipped before the guard keep working: StatTrak/wear updates never take an item away.
+$own->removeGuard();
+$db->prepare('INSERT INTO wp_player_skins(steamid,weapon_team,weapon_defindex,weapon_paint_id) VALUES (?,2,9,344)')->execute([$f]);
+$create=new ReflectionMethod(CloudHubOwnership::class,'guardSql');
+foreach ($create->invoke(null) as $name=>$sql) $db->exec("CREATE TRIGGER $name $sql");
+$db->prepare('UPDATE `wp_player_skins` SET `weapon_stattrak` = 1, `weapon_stattrak_count` = 5 WHERE `steamid` = ? AND `weapon_defindex` = 9 AND `weapon_team` = 2')->execute([$f]);
+$check((int)$paintOf($f,2,9)===344 && $count("SELECT weapon_stattrak_count FROM wp_player_skins WHERE steamid='$f' AND weapon_defindex=9")===5,'StatTrak update keeps an item equipped before the guard');
+$pluginSkin($f,2,9,344); $check((int)$paintOf($f,2,9)===344,'Re-saving the same item keeps it');
+$audit=$own->audit(); $hit=array_values(array_filter($audit['sample'],fn($r)=>$r['steamid']===$f));
+$check($hit && in_array(['weapon_defindex'=>9,'paint_id'=>344],$hit[0]['items'],true),'Audit reports the item equipped before the guard');
+$pluginSkin($f,2,9,1); $check((int)$paintOf($f,2,9)===0,'Changing it to another unowned finish is refused');
+$removed=$own->removeGuard();
+$check($removed['triggers']===[] && (int)$paintOf($e,3,7)===(int)$ak['paint_id'],'Guard removal drops triggers and keeps stored equipment');
+$pluginSkin($f,2,7,(int)$ak['paint_id']); $check((int)$paintOf($f,2,7)===(int)$ak['paint_id'],'Without the guard WeaponPaints writes work as before');
+
 // Without migration 005 enforcement is off and the shop works on purchases alone.
 $db->exec("UPDATE cloudhub_schema_migrations SET version='005_hidden_for_test' WHERE version='005_cloudhub_ownership.sql'");
 try {
@@ -93,7 +150,7 @@ try {
 } finally { $db->exec("UPDATE cloudhub_schema_migrations SET version='005_cloudhub_ownership.sql' WHERE version='005_hidden_for_test'"); }
 
 // Cleanup of fixture players. The snapshot stays so the enforced API/UI tests run with enforcement active.
-foreach(['wp_player_skins','wp_player_knife','wp_player_gloves','wp_saved_loadouts'] as $t)$db->exec("DELETE FROM $t WHERE steamid LIKE '765611980000008%'");
+foreach(['wp_player_skins','wp_player_knife','wp_player_gloves','wp_player_music','wp_saved_loadouts'] as $t)$db->exec("DELETE FROM $t WHERE steamid LIKE '765611980000008%'");
 $db->exec("DELETE FROM cloudhub_legacy_ownership WHERE steamid LIKE '765611980000008%'");
 $db->exec("DELETE FROM cloudhub_player_inventory WHERE steamid LIKE '765611980000008%'");
 $db->exec("DELETE FROM cloudhub_shop_purchases WHERE steamid LIKE '765611980000008%'");
