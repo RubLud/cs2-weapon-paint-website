@@ -66,7 +66,7 @@ $check(count($own->missing($e,[[(int)$knife['weapon_defindex'],(int)$knife['pain
 
 // Server view for the in-game menus: same sources as the guard, every requested player answered.
 $view=$own->serverView([$c,$e,'76561198000000899'],true); $players=(array)$view['players'];
-$check($view['enforced']===true && array_keys($players)===[$c,$e,'76561198000000899'] && $players['76561198000000899']===[],'Server view answers every requested player, also those owning nothing');
+$check($view['enforced']===true && array_map('strval',array_keys($players))===[$c,$e,'76561198000000899'] && $players['76561198000000899']===[],'Server view answers every requested player, also those owning nothing');
 $check(in_array($item($ak),$players[$c],true) && in_array([7,99999],$players[$c],true),'Server view includes legacy items');
 $check(in_array($item($knife),$players[$e],true) && in_array($item($glove),$players[$e],true),'Server view includes purchases');
 $check(in_array((int)$knife['weapon_defindex'],$view['models'],true) && in_array((int)$glove['weapon_defindex'],$view['models'],true) && !in_array(7,$view['models'],true),'Server view lists knife and glove models only');
