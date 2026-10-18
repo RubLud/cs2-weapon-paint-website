@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__.'/CloudHubAccounts.php';
+require_once __DIR__.'/CloudHubCommunity.php';
 class CloudHubSocialError extends RuntimeException {
     public function __construct(string $message, public int $status=403) { parent::__construct($message); }
 }
@@ -8,6 +9,14 @@ final class CloudHubSocial {
     public function __construct(private PDO $db) {}
     private function q(string $sql,array $args=[]): PDOStatement { $s=$this->db->prepare($sql); $s->execute($args); return $s; }
     public static function enabled(): bool { return defined('CLOUDHUB_SOCIAL_ENABLED') && CLOUDHUB_SOCIAL_ENABLED===true; }
+    /** Flag plus applied migration 003: an enabled flag without the schema degrades to Stage 3 behaviour. */
+    public static function active(PDO $db): bool {
+        if (!self::enabled()) return false;
+        try { $ready=(bool)$db->query("SELECT 1 FROM cloudhub_schema_migrations WHERE version='003_cloudhub_social.sql'")->fetchColumn(); }
+        catch (PDOException) { $ready=false; }
+        if (!$ready) error_log('CloudHub social is enabled but migration 003_cloudhub_social.sql is not applied');
+        return $ready;
+    }
     public static function id(string $id): string {
         if (!preg_match('/^[1-9][0-9]{0,18}$/D',$id) || strlen($id)===19 && strcmp($id,'9223372036854775807')>0) throw new InvalidArgumentException('Nieprawidłowy identyfikator.');
         return $id;
@@ -42,16 +51,18 @@ final class CloudHubSocial {
     }
     public function canModerate(string $actor): bool { return (new CloudHubAccounts($this->db))->can($actor,'moderation.manage'); }
     public function relation(string $actor,string $target): array {
-        $this->settings($target);
-        $ownBlock=(bool)$this->q('SELECT 1 FROM cloudhub_blocks WHERE actor=? AND target=?',[$actor,$target])->fetchColumn();
-        if ($this->blocked($actor,$target)) return ['status'=>'blocked','blocked_by_me'=>$ownBlock];
+        $settings=$this->settings($target);
+        if ((bool)$this->q('SELECT 1 FROM cloudhub_blocks WHERE actor=? AND target=?',[$actor,$target])->fetchColumn()) return ['status'=>'blocked','blocked_by_me'=>true];
+        // A block by the other party looks the same as an account that does not accept this viewer's invitations.
+        if ($this->blocked($actor,$target)) return ['status'=>'unavailable','blocked_by_me'=>false];
         $pair=[$actor,$target]; sort($pair,SORT_STRING);
         $r=$this->q('SELECT sender,status FROM cloudhub_friendships WHERE low_id=? AND high_id=?',$pair)->fetch(PDO::FETCH_ASSOC);
-        return ['status'=>!$r?'none':($r['status']==='accepted'?'friends':($r['sender']===$actor?'sent':'received')),'blocked_by_me'=>false];
+        if (!$r) return ['status'=>$actor!==$target && $this->allows($settings['invites_policy'],$target,$actor)?'none':'unavailable','blocked_by_me'=>false];
+        return ['status'=>$r['status']==='accepted'?'friends':($r['sender']===$actor?'sent':'received'),'blocked_by_me'=>false];
     }
     private function notify(string $recipient,string $actor,string $kind,string $profile,?string $comment=null): void {
         if ($recipient===$actor || $this->blocked($recipient,$actor)) return;
-        $this->q('INSERT INTO cloudhub_notifications(recipient,actor,kind,profile_id,comment_id) VALUES (?,?,?,?,?)',[$recipient,$actor,$kind,$profile,$comment]);
+        $this->q('INSERT INTO cloudhub_notifications(recipient,actor,kind,profile_id,comment_id,created_at) VALUES (?,?,?,?,?,UTC_TIMESTAMP(6))',[$recipient,$actor,$kind,$profile,$comment]);
     }
     private function limit(string $actor,string $action,int $max,int $gap=0): void {
         $r=$this->q('SELECT attempts,TIMESTAMPDIFF(SECOND,window_start,UTC_TIMESTAMP(6)) age,TIMESTAMPDIFF(SECOND,last_at,UTC_TIMESTAMP(6)) gap FROM cloudhub_social_limits WHERE actor=? AND action=?',[$actor,$action])->fetch(PDO::FETCH_ASSOC);
@@ -61,7 +72,7 @@ final class CloudHubSocial {
     /** All writes enter here. Actor is always taken from the Steam session by the endpoint. */
     public function mutate(string $actor,string $action,array $input): array {
         CloudHubAccounts::steamId($actor);
-        $fields=['invite'=>['target'],'accept'=>['target'],'reject'=>['target'],'cancel'=>['target'],'remove'=>['target'],'block'=>['target'],'unblock'=>['target'],'comment'=>['target','body'],'delete'=>['id','reason'],'report'=>['id','reason'],'resolve'=>['id','reason'],'read'=>['id'],'settings'=>['bio','profile_visibility','activity_visibility','friends_visibility','invites_policy','comments_policy','theme','banner']];
+        $fields=['invite'=>['target'],'accept'=>['target'],'reject'=>['target'],'cancel'=>['target'],'remove'=>['target'],'block'=>['target'],'unblock'=>['target'],'comment'=>['target','body'],'delete'=>['id','reason'],'report'=>['id','reason'],'resolve'=>['id','reason'],'read'=>['id'],'read_all'=>[],'settings'=>['bio','profile_visibility','activity_visibility','friends_visibility','invites_policy','comments_policy','theme','banner']];
         if (!isset($fields[$action]) || array_diff(array_keys($input),$fields[$action])) throw new InvalidArgumentException('Nieobsługiwane pola operacji.');
         foreach ($input as $v) if (!is_string($v)) throw new InvalidArgumentException('Nieprawidłowa wartość.');
         $lock='cloudhub-social-'.substr(hash('sha256',(string)$this->db->query('SELECT DATABASE()')->fetchColumn()),0,32);
@@ -91,6 +102,10 @@ final class CloudHubSocial {
             $this->q('UPDATE cloudhub_notifications SET read_at=COALESCE(read_at,UTC_TIMESTAMP(6)) WHERE id=? AND recipient=?',[$id,$actor]);
             return ['saved'=>true];
         }
+        if ($action==='read_all') {
+            $this->q('UPDATE cloudhub_notifications SET read_at=UTC_TIMESTAMP(6) WHERE recipient=? AND read_at IS NULL',[$actor]);
+            return ['saved'=>true];
+        }
         if (in_array($action,['delete','report','resolve'],true)) return $this->commentAction($actor,$action,$in);
         $target=CloudHubAccounts::steamId($in['target']??''); $settings=$this->settings($target);
         $pair=[$actor,$target]; sort($pair,SORT_STRING);
@@ -98,12 +113,12 @@ final class CloudHubSocial {
             $this->visible($target,$actor);
             if (!$this->allows($settings['comments_policy'],$target,$actor)) throw new CloudHubSocialError('Ten profil nie przyjmuje Twoich komentarzy.');
             $body=self::text($in['body']??null,1000); $this->limit($actor,'comment',30,15);
-            $this->q('INSERT INTO cloudhub_profile_comments(profile_id,author,body) VALUES (?,?,?)',[$target,$actor,$body]); $id=(string)$this->db->lastInsertId();
+            $this->q('INSERT INTO cloudhub_profile_comments(profile_id,author,body,created_at) VALUES (?,?,?,UTC_TIMESTAMP(6))',[$target,$actor,$body]); $id=(string)$this->db->lastInsertId();
             $this->notify($target,$actor,'comment',$target,$id); return ['id'=>$id];
         }
         if ($actor===$target) throw new InvalidArgumentException('Nie możesz utworzyć relacji z własnym kontem.');
         if ($action==='block') {
-            $this->q('INSERT IGNORE INTO cloudhub_blocks(actor,target) VALUES (?,?)',[$actor,$target]);
+            $this->q('INSERT IGNORE INTO cloudhub_blocks(actor,target,created_at) VALUES (?,?,UTC_TIMESTAMP(6))',[$actor,$target]);
             $this->q('DELETE FROM cloudhub_friendships WHERE low_id=? AND high_id=?',$pair);
             $this->q('DELETE FROM cloudhub_notifications WHERE (recipient=? AND actor=?) OR (recipient=? AND actor=?)',[$actor,$target,$target,$actor]);
         } elseif ($action==='unblock') $this->q('DELETE FROM cloudhub_blocks WHERE actor=? AND target=?',[$actor,$target]);
@@ -114,7 +129,7 @@ final class CloudHubSocial {
                 if ($r) throw new CloudHubSocialError('Relacja już istnieje.',409);
                 if (!$this->allows($settings['invites_policy'],$target,$actor)) throw new CloudHubSocialError('Gracz nie przyjmuje Twoich zaproszeń.');
                 $this->limit($actor,'invite',20,3);
-                $this->q('INSERT INTO cloudhub_friendships(low_id,high_id,sender) VALUES (?,?,?)',[...$pair,$actor]);
+                $this->q('INSERT INTO cloudhub_friendships(low_id,high_id,sender,created_at) VALUES (?,?,?,UTC_TIMESTAMP(6))',[...$pair,$actor]);
                 $this->notify($target,$actor,'invite',$actor);
             } else {
                 $valid=$r && match($action) {'accept','reject'=>$r['status']==='pending' && $r['sender']!==$actor,'cancel'=>$r['status']==='pending' && $r['sender']===$actor,'remove'=>$r['status']==='accepted',default=>false};
@@ -127,12 +142,12 @@ final class CloudHubSocial {
         return $this->relation($actor,$target);
     }
     private function audit(string $actor,string $target,string $action,string $reason,array $meta): void {
-        $this->q('INSERT INTO cloudhub_admin_audit_logs(actor_steamid,target_steamid,action,reason,metadata_json) VALUES (?,?,?,?,?)',[$actor,$target,'social.'.$action,$reason,json_encode($meta,JSON_THROW_ON_ERROR)]);
+        $this->q('INSERT INTO cloudhub_admin_audit_logs(actor_steamid,target_steamid,action,reason,metadata_json,created_at) VALUES (?,?,?,?,?,UTC_TIMESTAMP(6))',[$actor,$target,'social.'.$action,$reason,json_encode($meta,JSON_THROW_ON_ERROR)]);
     }
     private function requireModerator(string $actor): void {
-        // Lock roles and permission grants for the duration of a moderation transaction.
-        $roles=$this->q('SELECT role FROM cloudhub_player_roles WHERE steamid=? FOR UPDATE',[$actor])->fetchAll(PDO::FETCH_COLUMN);
-        $grants=$this->q("SELECT role FROM cloudhub_role_permissions WHERE permission='moderation.manage' FOR UPDATE")->fetchAll(PDO::FETCH_COLUMN);
+        // Shared locks hold roles and grants for the moderation transaction: a revocation waits, and only SELECT is required.
+        $roles=$this->q('SELECT role FROM cloudhub_player_roles WHERE steamid=? LOCK IN SHARE MODE',[$actor])->fetchAll(PDO::FETCH_COLUMN);
+        $grants=$this->q("SELECT role FROM cloudhub_role_permissions WHERE permission='moderation.manage' LOCK IN SHARE MODE")->fetchAll(PDO::FETCH_COLUMN);
         if (!in_array('OWNER',$roles,true) && !array_intersect($roles,$grants)) throw new CloudHubSocialError('Brak uprawnień do moderacji.');
     }
     private function commentAction(string $actor,string $action,array $in): array {
@@ -148,8 +163,9 @@ final class CloudHubSocial {
         if ($action==='report') {
             $this->visible($c['profile_id'],$actor);
             if ($this->blocked($actor,$c['author'])) throw new CloudHubSocialError('Komentarz niedostępny.',404);
+            if ($c['author']===$actor) throw new InvalidArgumentException('Nie możesz zgłosić własnego komentarza.');
             $reason=self::text($in['reason']??null,500); $this->limit($actor,'report',20,3);
-            $this->q('INSERT IGNORE INTO cloudhub_comment_reports(comment_id,reporter,reason) VALUES (?,?,?)',[$id,$actor,$reason]); return ['saved'=>true];
+            $this->q('INSERT IGNORE INTO cloudhub_comment_reports(comment_id,reporter,reason,created_at) VALUES (?,?,?,UTC_TIMESTAMP(6))',[$id,$actor,$reason]); return ['saved'=>true];
         }
         $moderation=$actor!==$c['author'] && $actor!==$c['profile_id'];
         if ($moderation) { $this->requireModerator($actor); $reason=self::text($in['reason']??null,500); }
@@ -172,9 +188,16 @@ final class CloudHubSocial {
     public function comments(string $target,?string $viewer,?string $before): array {
         $this->visible($target,$viewer); $args=[$target]; $where=$this->cursor($before,'c.id',$args);
         if ($viewer!==null) { $where.=' AND NOT EXISTS(SELECT 1 FROM cloudhub_blocks b WHERE (b.actor=? AND b.target=c.author) OR (b.target=? AND b.actor=c.author))'; $args[]=$viewer; $args[]=$viewer; }
-        $rows=$this->q('SELECT CAST(c.id AS CHAR) id,c.author,c.body,c.created_at,p.nickname,p.avatar_url FROM cloudhub_profile_comments c JOIN cloudhub_players p ON p.steamid=c.author WHERE c.profile_id=? AND c.deleted_at IS NULL'.$where.' ORDER BY c.id DESC LIMIT 21',$args)->fetchAll(PDO::FETCH_ASSOC);
+        $rows=$this->q('SELECT CAST(c.id AS CHAR) id,c.author,c.body,c.created_at,p.nickname,p.avatar_url,f.profile_visibility FROM cloudhub_profile_comments c JOIN cloudhub_players p ON p.steamid=c.author JOIN cloudhub_profiles f ON f.steamid=c.author WHERE c.profile_id=? AND c.deleted_at IS NULL'.$where.' ORDER BY c.id DESC LIMIT 21',$args)->fetchAll(PDO::FETCH_ASSOC);
         $moderator=$viewer!==null && $this->canModerate($viewer);
-        foreach ($rows as &$r) { $r['can_delete']=$viewer!==null && ($r['author']===$viewer || $target===$viewer || $moderator); $r['moderation_required']=$r['can_delete'] && $r['author']!==$viewer && $target!==$viewer; }
+        // Staff roles are always shown; rank and TOP follow the author's own profile privacy.
+        $withStats=array_column(array_filter($rows,fn($r)=>$this->allows($r['profile_visibility'],$r['author'],$viewer)),'author');
+        $badges=(new CloudHubCommunity($this->db))->badges(array_column($rows,'author'),$withStats);
+        foreach ($rows as &$r) {
+            $r['can_delete']=$viewer!==null && ($r['author']===$viewer || $target===$viewer || $moderator); $r['moderation_required']=$r['can_delete'] && $r['author']!==$viewer && $target!==$viewer;
+            $r['can_report']=$viewer!==null && $r['author']!==$viewer; $r['badges']=$badges[$r['author']]; unset($r['profile_visibility']);
+        }
+        unset($r);
         return $this->page($rows);
     }
     public function friendList(string $target,?string $viewer,int $page=1): array {
@@ -185,14 +208,22 @@ final class CloudHubSocial {
         // Identity on a deliberately shared friend list is public; profile contents retain independent privacy.
         if ($viewer!==null) { $sql.=' AND NOT EXISTS(SELECT 1 FROM cloudhub_blocks b WHERE (b.actor=? AND b.target=p.steamid) OR (b.target=? AND b.actor=p.steamid))'; $args[]=$viewer; $args[]=$viewer; }
         $total=(int)$this->q('SELECT COUNT(*)'.$sql,$args)->fetchColumn(); $offset=($page-1)*20;
-        return ['items'=>$this->q('SELECT p.steamid,p.nickname,p.avatar_url'.$sql." ORDER BY p.steamid LIMIT 20 OFFSET $offset",$args)->fetchAll(PDO::FETCH_ASSOC),'total'=>$total,'page'=>$page];
+        $items=$this->q('SELECT p.steamid,p.nickname,p.avatar_url'.$sql." ORDER BY p.steamid LIMIT 20 OFFSET $offset",$args)->fetchAll(PDO::FETCH_ASSOC);
+        // Own list: every row is an accepted friendship (blocks delete friendships), so no per-row relation lookup is needed.
+        if ($viewer===$target) foreach ($items as &$item) $item['relation']=['status'=>'friends','blocked_by_me'=>false];
+        unset($item);
+        return ['items'=>$items,'total'=>$total,'page'=>$page];
     }
     public function connections(string $actor,string $kind,int $page): array {
         if ($page<1 || $page>10000 || !in_array($kind,['received','sent','blocked'],true)) throw new InvalidArgumentException('Nieprawidłowa lista.');
         $offset=($page-1)*20;
         if ($kind==='blocked') { $sql=' FROM cloudhub_blocks b JOIN cloudhub_players p ON p.steamid=b.target WHERE b.actor=?'; $args=[$actor]; }
         else { $sql=" FROM cloudhub_friendships f JOIN cloudhub_players p ON p.steamid=IF(f.low_id=?,f.high_id,f.low_id) WHERE (f.low_id=? OR f.high_id=?) AND f.status='pending' AND f.sender".($kind==='sent'?'=':'<>').'?'; $args=[$actor,$actor,$actor,$actor]; }
-        return ['items'=>$this->q('SELECT p.steamid,p.nickname,p.avatar_url'.$sql." ORDER BY p.steamid LIMIT 20 OFFSET $offset",$args)->fetchAll(PDO::FETCH_ASSOC),'total'=>(int)$this->q('SELECT COUNT(*)'.$sql,$args)->fetchColumn(),'page'=>$page];
+        $items=$this->q('SELECT p.steamid,p.nickname,p.avatar_url'.$sql." ORDER BY p.steamid LIMIT 20 OFFSET $offset",$args)->fetchAll(PDO::FETCH_ASSOC);
+        // The list kind is the relation: blocks remove friendships, pending rows are directional.
+        foreach ($items as &$item) $item['relation']=['status'=>$kind,'blocked_by_me'=>$kind==='blocked'];
+        unset($item);
+        return ['items'=>$items,'total'=>(int)$this->q('SELECT COUNT(*)'.$sql,$args)->fetchColumn(),'page'=>$page];
     }
     public function notifications(string $actor,?string $before): array {
         $args=[$actor]; $where=$this->cursor($before,'n.id',$args);

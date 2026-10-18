@@ -1,0 +1,2 @@
+# Migration checksums (sha256 of the file) must not depend on the checkout platform.
+*.sql text eol=lf

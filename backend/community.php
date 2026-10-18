@@ -16,9 +16,10 @@ if ($action==='edit') {
     wp_require_post();
 } elseif ($method!=='GET') { header('Allow: GET'); wp_json_error(405,'Use GET'); }
 require_once __DIR__.'/class/Database.php';
-$db=Database::getInstance()->getConnection();
-$community=new CloudHubCommunity($db);
+$db=null;
 try {
+    $db=Database::getInstance()->getConnection();
+    $community=new CloudHubCommunity($db);
     foreach ($_GET as $value) if (!is_string($value)) throw new InvalidArgumentException('Invalid parameter');
     if ($action!=='edit') $db->beginTransaction();
     $result=match ($action) {
@@ -31,5 +32,6 @@ try {
     if ($db->inTransaction()) $db->commit();
     if ($action==='profile' && $result['profile']===null) wp_json_error(404,'Profile unavailable');
     echo json_encode($result,JSON_THROW_ON_ERROR);
-} catch (CloudHubSocialError $e) { if ($db->inTransaction()) $db->rollBack(); wp_json_error($e->status,$e->getMessage()); }
-catch (InvalidArgumentException $e) { if ($db->inTransaction()) $db->rollBack(); wp_json_error(422,$e->getMessage()); }
+} catch (CloudHubSocialError $e) { if ($db?->inTransaction()) $db->rollBack(); if ($e->status===429) header('Retry-After: 60'); wp_json_error($e->status,$e->getMessage()); }
+catch (InvalidArgumentException $e) { if ($db?->inTransaction()) $db->rollBack(); wp_json_error(422,$e->getMessage()); }
+catch (Throwable $e) { if ($db?->inTransaction()) $db->rollBack(); error_log('CloudHub community request failed: '.get_class($e)); wp_json_error(503,'Service temporarily unavailable'); }

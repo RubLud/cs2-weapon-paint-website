@@ -13,6 +13,21 @@ Gałąź `cloudhub-stage4-social`, baza aktualnego `master` `783223b9` po potwie
 - Do osobnej oceny: przepustowość globalnej blokady i retencja danych. Etap 4 przygotowany do przeglądu jako domyślnie wyłączona funkcja. Właściciel decyduje o Merge.
 - Następny zakres, niewykonany: Etap 5 — sklep Cloud Coins i zatwierdzona ekonomia zakupów. Własność/WeaponPaints, CS2UIKit, wdrożenia pluginów i Desktop nadal w kolejnych etapach.
 
+### Poprawki po przeglądzie PR #6 (18 października 2026)
+
+Lokalna gałąź `cloudhub-stage4-social-fixes`, utworzona z `cloudhub-stage4-social` (`b202a4f`). Commity Codexa bez zmian. Bez push, merge, wdrożenia i migracji.
+
+- Moduł aktywny tylko przy fladze **i** zastosowanej migracji 003 (`CloudHubSocial::active`). Wcześniej flaga bez migracji psuła ranking i profile. `community.php` i `social.php` zamieniają nieoczekiwane błędy na 503.
+- Panel OWNER nie pokazuje błędu społeczności przy wyłączonym module. `capabilities` pobierane raz na załadowanie aplikacji.
+- `/friends` bez N+1: wiersze list zawierają relację, przyciski korzystają z odpowiedzi POST. Odświeżenia nie migają.
+- Aplikacyjne `askConfirm` i inline powód moderacji/zgłoszenia zamiast `window.confirm/prompt`.
+- Znaczniki czasu społeczności w UTC (`UTC_TIMESTAMP(6)`). Odczyt ról przy moderacji przez `LOCK IN SHARE MODE` (wystarcza samo SELECT).
+- Prywatność: blokada drugiej strony widoczna jako neutralne `unavailable`. Odznaki autorów komentarzy (§15): rola zawsze, ranga/TOP zgodnie z prywatnością autora. `read_all`, brak zgłaszania własnych komentarzy.
+- Testy rozszerzone (PHP i Playwright). Liczba migracji w `foundations.php` liczona z plików. `.gitattributes` wymusza LF dla `*.sql` (checksumy).
+- Weryfikacja lokalna na Windows: `pnpm lint`, `pnpm build`, `php -l`, `git diff --check`. Harness `pnpm test` wymaga Linuksa, dlatego uruchamia go nowe CI (`.github/workflows/ci.yml`, `pull_request`, `contents: read`, bez sekretów).
+- **CI PR #7, run `39151948726` (18 października 2026): PASS.** Job `static`: `pnpm lint`, `pnpm build`, `php -l` dla 45 plików PHP, wszystko bez błędów. Job `integration`: jednorazowa MariaDB 10.11 tylko przez socket, **224 asercje PHP** (fundamenty 31, Core 50, community 29, OWNER 24, społeczność 90) oraz **21/21 testów Playwright API/UI**, bez pominiętych i niestabilnych. Nie potwierdzono: rzeczywistego Steam OpenID, produkcyjnego FPM/HTTPS, MariaDB w wersji produkcyjnej i minimalnych grantów SQL. To zostaje na staging.
+- Otwarte wymagania (§17, §21): moderacja opisów profili, blokady moderacyjne, retencja i usuwanie kont, indeks audytu/`ON DELETE` (migracja 004). Kolekcja skinów na profilu w Etapie 5. Pomiar przepustowości globalnego `GET_LOCK`.
+
 ## Etap 3 — zachowany zakres (17 października 2026)
 
 Zaimplementowano profile, ranking WWW, niezależne odznaki ról/rang/TOP, prywatny portfel i panel OWNER na `cloudhub-stage3-profiles`, od aktualnego master `8fe59c8`. Etapy 1–2 pozostają zachowane; nie odtwarzano Core. Dokumentacja: [COMMUNITY_STAGE3.pl.md](docs/COMMUNITY_STAGE3.pl.md), wyniki: [COMMUNITY_STAGE3_TEST_REPORT.md](docs/COMMUNITY_STAGE3_TEST_REPORT.md).
