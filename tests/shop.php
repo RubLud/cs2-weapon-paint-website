@@ -23,8 +23,8 @@ $count=fn($sql)=>(int)$db->query($sql)->fetchColumn();
 $check(CloudHubShop::active($db),'Shop active with flag and migration 004');
 
 // Seeding: a small real slice of the bundled catalog.
-$all=CloudHubShopPricing::catalog(wp_catalog('weapons.json'),wp_catalog('data/skins_en.json'),wp_catalog('data/gloves_en.json'));
-$pick=function($fn)use($all){foreach($all as $p)if($fn($p))return $p;throw new RuntimeException('Fixture product missing');};
+$all=CloudHubShopPricing::catalog(wp_catalog('weapons.json'),wp_catalog('data/skins_en.json'),wp_catalog('data/gloves_en.json'),wp_catalog('data/shop_rarity.json'));
+$pick=function($fn)use($all){foreach($all as $p)if(!$p['needs_review'] && $fn($p))return $p;throw new RuntimeException('Fixture product missing');};
 $subset=[
     $pick(fn($p)=>$p['kind']==='weapon_skin' && $p['weapon_defindex']===4),
     $pick(fn($p)=>$p['kind']==='weapon_skin' && $p['weapon_defindex']===7),
@@ -129,6 +129,18 @@ $check($count("SELECT COUNT(*) FROM cloudhub_wallet_transactions WHERE steamid='
 $stats=$shop->stats($owner);
 $check((int)$stats['purchases']===$count('SELECT COUNT(*) FROM cloudhub_shop_purchases') && (int)$stats['active_products']===5 && in_array('shop',array_column($stats['sources'],'source'),true),'OWNER economy statistics');
 $reject(fn()=>$shop->stats($a),403);
+
+// Items flagged for review are never activated automatically and need an explicit OWNER price.
+$flagged=[['kind'=>'weapon_skin','weapon_defindex'=>16,'paint_id'=>309,'name'=>'M4A4 | Howl','rarity'=>'contraband','phase'=>null,'finish'=>null,'price_cc'=>2500,'needs_review'=>true,'review_reason'=>'Contraband'],
+    ['kind'=>'weapon_skin','weapon_defindex'=>7,'paint_id'=>99999,'name'=>'Unknown fixture','rarity'=>null,'phase'=>null,'finish'=>null,'price_cc'=>null,'needs_review'=>true,'review_reason'=>'No rarity data']];
+$check($shop->seed($flagged,true,true)['review']===2,'Seed reports review items');
+$review=$shop->adminProducts($owner,['review'=>'1'])['items'];
+$check(count($review)===2 && !array_filter($review,fn($p)=>$p['is_active']) && in_array(null,array_column($review,'price_cc'),true),'--activate skips review items; unknown item stays unpriced');
+$unknownId=(string)array_values(array_filter($review,fn($p)=>$p['price_cc']===null))[0]['id'];
+try { $db->exec("UPDATE cloudhub_shop_products SET is_active=1 WHERE id=$unknownId"); $check(false,'Database must refuse an unpriced active product'); } catch (PDOException) { $check(true,'Database refuses unpriced active product'); }
+$reject(fn()=>$shop->buy($a,['product_id'=>$unknownId,'request_id'=>$uuid(20)]),404);
+$check($edit($unknownId,700,0,109)['product']['needs_review']===false && $shop->adminProducts($owner,['review'=>'1'])['total']===1,'Explicit OWNER price completes the review');
+$check($shop->catalog(null,[])['total']===5,'Review items never appear in the catalog');
 
 // Missing migration degrades to disabled.
 $db->exec("UPDATE cloudhub_schema_migrations SET version='004_hidden_for_test' WHERE version='004_cloudhub_shop.sql'");

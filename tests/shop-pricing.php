@@ -4,8 +4,10 @@ require_once __DIR__.'/../backend/class/Security.php';
 require_once __DIR__.'/../backend/class/CloudHubShopPricing.php';
 $n=0;
 $check=function(bool $ok,string $message)use(&$n){if(!$ok)throw new RuntimeException($message);$n++;};
-$weapons=wp_catalog('weapons.json'); $skins=wp_catalog('data/skins_en.json'); $gloves=wp_catalog('data/gloves_en.json');
-$products=CloudHubShopPricing::catalog($weapons,$skins,$gloves);
+$weapons=wp_catalog('weapons.json'); $skins=wp_catalog('data/skins_en.json'); $gloves=wp_catalog('data/gloves_en.json'); $rarity=wp_catalog('data/shop_rarity.json');
+$products=CloudHubShopPricing::catalog($weapons,$skins,$gloves,$rarity);
+$check(str_contains($rarity['source'],'ByMykel/CSGO-API') && str_contains($rarity['license'],'MIT') && preg_match('/^[a-f0-9]{64}$/D',$rarity['sha256'])===1,'Rarity snapshot keeps source, license and checksum');
+$find=function(int $def,int $paint)use($products){foreach($products as $p)if($p['weapon_defindex']===$def&&$p['paint_id']===$paint)return $p;throw new RuntimeException("Missing product $def:$paint");};
 $keys=array_map(fn($p)=>$p['weapon_defindex'].':'.$p['paint_id'],$products);
 $check(count($keys)===count(array_unique($keys)),'One product per weapon and paint');
 $byKind=[]; foreach($products as $p) $byKind[$p['kind']][]=$p;
@@ -15,8 +17,23 @@ $check(!array_filter($byKind['weapon_skin'],fn($p)=>$p['paint_id']===0),'Default
 $check(!array_filter($byKind['weapon_skin'],fn($p)=>in_array($p['weapon_defindex'],$knives,true)),'Knife skins are knife products');
 $check(count(array_filter($byKind['knife'],fn($p)=>$p['paint_id']===0))>0,'Vanilla knife models are sold');
 $check(!array_filter($byKind['glove'],fn($p)=>$p['weapon_defindex']===0 || $p['paint_id']===0),'Default gloves stay free');
-$check(!array_filter($byKind['weapon_skin'],fn($p)=>$p['price_cc']<50 || $p['price_cc']>1100),'Weapon skin prices within proposed tiers');
-$check(!array_filter(array_merge($byKind['knife'],$byKind['glove']),fn($p)=>$p['price_cc']<1500 || $p['price_cc']>4000),'Knife and glove prices within 1500-4000');
+$priced=fn($list)=>array_filter($list,fn($p)=>$p['price_cc']!==null);
+$check(!array_filter($priced($byKind['weapon_skin']),fn($p)=>$p['price_cc']<50 || $p['price_cc']>2500),'Weapon skin prices within 50-2500');
+$check(!array_filter($priced(array_merge($byKind['knife'],$byKind['glove'])),fn($p)=>$p['price_cc']<1500 || $p['price_cc']>CloudHubShopPricing::MAX_PRICE),'Knife and glove prices within 1500-5000');
+$check(!array_filter($products,fn($p)=>$p['paint_id']>0 && $p['rarity']===null),'Every finished product has official rarity');
+$check(!array_filter($products,fn($p)=>$p['price_cc']===null && !$p['needs_review']),'Unpriced products are always flagged for review');
+$check(!array_filter($products,fn($p)=>$p['needs_review'] && $p['review_reason']===null),'Review flag carries a reason');
+$howl=$find(16,309);
+$check($howl['rarity']==='contraband' && $howl['needs_review'],'Contraband M4A4 | Howl needs OWNER decision');
+// Same weapon, higher official grade, higher price.
+$ak=array_filter($byKind['weapon_skin'],fn($p)=>$p['weapon_defindex']===7);
+$avgBy=function($rar)use($ak){$x=array_column(array_filter($ak,fn($p)=>$p['rarity']===$rar),'price_cc');return $x?array_sum($x)/count($x):null;};
+$check($avgBy('mil_spec')<$avgBy('restricted') && $avgBy('restricted')<$avgBy('classified') && $avgBy('classified')<$avgBy('covert'),'Price follows rarity grade');
+// Doppler phases are separate paint indexes and priced individually (Karambit 507).
+[$p1,$p2,$bp,$ruby,$em]=[$find(507,418),$find(507,419),$find(507,417),$find(507,415),$find(507,568)];
+$check($p1['phase']==='Phase 1' && $ruby['phase']==='Ruby' && $em['phase']==='Emerald','Doppler phases recognised from game data');
+$check($p1['price_cc']<$p2['price_cc'] && $p2['price_cc']<$bp['price_cc'] && $bp['price_cc']<$ruby['price_cc'] && $ruby['price_cc']<$em['price_cc'],'Rare phases cost more');
+$check($find(507,0)['price_cc']===1500 && !$find(507,0)['needs_review'],'Vanilla knife has floor price');
 $check(count(array_unique(array_column($byKind['weapon_skin'],'price_cc')))>=5,'Weapon prices are differentiated');
 $check(count(array_unique(array_column($byKind['knife'],'price_cc')))>=3,'Knife prices are differentiated');
 foreach($skins as $s) if ((int)$s['paint']>0) {
@@ -41,7 +58,11 @@ foreach(CloudHubShopPricing::profiles() as $name=>$profile) {
 }
 $check(CloudHubShopPricing::matchesToBuy(100,66)===2 && CloudHubShopPricing::matchesToBuy(2000,66)===31 && CloudHubShopPricing::matchesToBuy(5,0)===null,'Matches to buy');
 $reject=function(callable $fn,string $message)use($check){try{$fn();}catch(InvalidArgumentException){$check(true,$message);return;}$check(false,$message);};
-$reject(fn()=>CloudHubShopPricing::proposedPrice('agent','x','Other',1,1),'Unknown kind rejected');
-$reject(fn()=>CloudHubShopPricing::proposedPrice('glove','','',1,1),'Unknown glove family rejected');
-$reject(fn()=>CloudHubShopPricing::proposedPrice('weapon_skin','x','Other',1,1),'Unknown weapon class rejected');
+$meta=['rarity'=>'covert','phase'=>null];
+$reject(fn()=>CloudHubShopPricing::propose('agent','x',1,1,$meta),'Unknown kind rejected');
+$unknown=CloudHubShopPricing::propose('weapon_skin','ak47',7,99999,null);
+$check($unknown['price_cc']===null && $unknown['needs_review'],'Missing rarity data gives no price and review');
+$check(CloudHubShopPricing::propose('knife','knife_karambit',507,9999,['rarity'=>'covert','phase'=>'Phase 9'])['needs_review'],'Unknown phase needs review');
+$check(CloudHubShopPricing::propose('glove','',1,1,['rarity'=>'extraordinary','phase'=>null])['needs_review'],'Unknown glove family needs review');
+$check(CloudHubShopPricing::propose('knife','bayonet',500,1,['rarity'=>'classified','phase'=>null])['needs_review'],'Unexpected knife grade needs review');
 fwrite(STDERR,"CloudHub shop pricing assertions passed: $n\n");

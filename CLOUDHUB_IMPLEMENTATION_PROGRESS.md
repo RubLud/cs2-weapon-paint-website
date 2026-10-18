@@ -31,8 +31,8 @@ Lokalna gałąź `cloudhub-stage5-shop` z `cloudhub-stage4-social` (`f22094b`). 
 - UI: `/shop`, `/inventory`, sekcja „Sklep i ekonomia” w `/admin`, etykieta zakupu w portfelu.
 - Flagi `CLOUDHUB_SHOP_ENABLED` (podgląd) i `CLOUDHUB_SHOP_PURCHASES_ENABLED` (zakupy), obie domyślnie `false`. Personalizacja nadal 0 CC.
 - Egzekwowanie własności: NIEZROBIONE, Etap 6.
-- CLI `bin/cloudhub-shop-catalog.php`: propozycja 2126 produktów, wszystkie nieaktywne do zatwierdzenia, oraz symulacja zarobków. Wniosek: `hourly_cc_cap=100` wyrównuje CC wszystkich profili do ~66 na mecz. Decyzja o balansie należy do właściciela; wartości nie zostały zmienione.
-- Weryfikacja lokalna PASS: lint, build, `php -l` (52 pliki), 36 asercji pricing, `--simulate`, `git diff --check`.
+- CLI `bin/cloudhub-shop-catalog.php`: propozycja 2126 produktów według oficjalnej rzadkości i faz Doppler (snapshot ByMykel/CSGO-API, MIT). Produkty bez wiarygodnych danych trafiają do weryfikacji bez ceny. Wszystko nieaktywne do zatwierdzenia. Do tego symulacja zarobków. Wniosek: `hourly_cc_cap=100` wyrównuje CC wszystkich profili do ~66 na mecz. Decyzja o balansie należy do właściciela; wartości nie zostały zmienione.
+- Weryfikacja lokalna PASS: lint, build, `php -l` (52 pliki), 47 asercji pricing, `--simulate`, `git diff --check`.
 - Niezweryfikowane lokalnie: `tests/shop.php` (baza), `tests/shop.spec.js` (API/UI) oraz regresja całego `pnpm test`. Wymagają CI na Linuksie, czyli push za zgodą.
 
 ## Etap 4 — społeczność (17 października 2026)

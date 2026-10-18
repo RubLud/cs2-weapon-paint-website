@@ -9,6 +9,13 @@ const number = value => value == null ? '—' : new Intl.NumberFormat('pl-PL').f
 const date = value => value ? new Date(value.replace(' ', 'T') + 'Z').toLocaleString('pl-PL') : ''
 const kinds = [['all','Wszystko'],['weapon_skin','Skiny broni'],['knife','Noże'],['glove','Rękawice']]
 const kindLabel = Object.fromEntries(kinds)
+// Official CS2 grades (from game data) and their in-game colours.
+const rarities = { consumer:['Consumer','#b0c3d9'], industrial:['Industrial','#5e98d9'], mil_spec:['Mil-Spec','#4b69ff'], restricted:['Restricted','#8847ff'], classified:['Classified','#d32ce6'], covert:['Covert','#eb4b4b'], contraband:['Contraband','#e4ae39'], extraordinary:['Extraordinary','#eb4b4b'] }
+function Rarity({ product }) {
+  const r = rarities[product.rarity]
+  if (!r) return null
+  return <span className="ch-shop-rarity" style={{ '--rarity': r[1] }}>{r[0]}{product.phase ? ` · ${product.phase}` : ''}</span>
+}
 let imageIndex
 /** Product images come from the same bundled WeaponPaints catalogs as the configurator. */
 function useProductImages() {
@@ -32,7 +39,7 @@ function ProductCard({ product, images, children }) {
   const image = images?.get(`${product.weapon_defindex}:${product.paint_id}`)
   return <article className="ch-shop-card ch-community-card">
     <div className="ch-shop-image">{image ? <img src={image} alt="" loading="lazy"/> : <span aria-hidden="true">◇</span>}</div>
-    <small>{kindLabel[product.kind]}</small><h3>{product.name}</h3>{children}
+    <small>{kindLabel[product.kind]}</small><h3>{product.name}</h3><Rarity product={product}/>{children}
   </article>
 }
 const pendingKey = steamid => 'cloudhub-pending-purchase:' + steamid
@@ -109,7 +116,7 @@ export function InventoryPage() {
   </>
 }
 function ProductEditor({ product, onSaved }) {
-  const [price, setPrice] = useState(String(product.price_cc)), [active, setActive] = useState(product.is_active), [reason, setReason] = useState('')
+  const [price, setPrice] = useState(product.price_cc == null ? '' : String(product.price_cc)), [active, setActive] = useState(product.is_active), [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false), [error, setError] = useState('')
   // One ID per attempt; a rejected change gets a new ID so corrected values are not treated as a reuse.
   const [request, setRequest] = useState(() => crypto.randomUUID())
@@ -126,23 +133,23 @@ function ProductEditor({ product, onSaved }) {
   </form>
 }
 export function ShopAdmin() {
-  const [search, setSearch] = useState(''), [query, setQuery] = useState({ search:'', kind:'all', active:'' }), [page, setPage] = useState(1)
+  const [search, setSearch] = useState(''), [query, setQuery] = useState({ search:'', kind:'all', status:'' }), [page, setPage] = useState(1)
   const [revision, setRevision] = useState(0), [editing, setEditing] = useState(null)
-  const products = useCommunityResource('admin.php?' + new URLSearchParams({ action:'shop_products', ...query, page:String(page), sort:'name' }), revision, { keep:true })
+  const products = useCommunityResource('admin.php?' + new URLSearchParams({ action:'shop_products', search:query.search, kind:query.kind, ...(query.status === 'review' ? { review:'1' } : query.status ? { active:query.status } : {}), page:String(page), sort:'name' }), revision, { keep:true })
   const stats = useCommunityResource('admin.php?action=shop_stats', revision, { keep:true })
   if (products.error?.status === 404) return null
   const s = stats.data
   return <section className="ch-community-card"><h2>Sklep i ekonomia</h2>
-    {s && <div className="ch-config-grid">{[['CC w obiegu',number(s.circulation_cc)],['Zakupy',number(s.purchases)],['Wydane CC',number(s.spent_cc)],['Aktywne produkty',`${number(s.active_products)} / ${number(s.products)}`],['CC z rund (7 dni)',number(s.round_cc_7d)],['Średnio na gracza (7 dni)',s.earning_players_7d ? number(String(BigInt(s.round_cc_7d) / BigInt(s.earning_players_7d))) : '—']].map(([l,v]) => <p key={l}><strong>{v}</strong> {l}</p>)}</div>}
+    {s && <div className="ch-config-grid">{[['CC w obiegu',number(s.circulation_cc)],['Zakupy',number(s.purchases)],['Wydane CC',number(s.spent_cc)],['Aktywne produkty',`${number(s.active_products)} / ${number(s.products)}`],['Do weryfikacji',number(s.review_products)],['CC z rund (7 dni)',number(s.round_cc_7d)],['Średnio na gracza (7 dni)',s.earning_players_7d ? number(String(BigInt(s.round_cc_7d) / BigInt(s.earning_players_7d))) : '—']].map(([l,v]) => <p key={l}><strong>{v}</strong> {l}</p>)}</div>}
     {s && !s.purchases_enabled && <p>Zakupy są wyłączone w konfiguracji serwera. Ceny są propozycją do zatwierdzenia.</p>}
     <form className="ch-community-search" onSubmit={e => { e.preventDefault(); setQuery(q => ({ ...q, search })); setPage(1) }}>
       <label htmlFor="shop-admin-search">Produkt</label><input id="shop-admin-search" value={search} onChange={e => setSearch(e.target.value)} maxLength={64}/>
       <select aria-label="Kategoria" value={query.kind} onChange={e => { setQuery(q => ({ ...q, kind:e.target.value })); setPage(1) }}>{kinds.map(([v,l]) => <option key={v} value={v}>{l}</option>)}</select>
-      <select aria-label="Status" value={query.active} onChange={e => { setQuery(q => ({ ...q, active:e.target.value })); setPage(1) }}><option value="">Wszystkie</option><option value="1">Aktywne</option><option value="0">Nieaktywne</option></select>
+      <select aria-label="Status" value={query.status} onChange={e => { setQuery(q => ({ ...q, status:e.target.value })); setPage(1) }}><option value="">Wszystkie</option><option value="1">Aktywne</option><option value="0">Nieaktywne</option><option value="review">Do weryfikacji</option></select>
       <button>Szukaj produktu</button>
     </form>
-    <ShopState resource={products}>{products.data && <><div className="ch-community-table-wrap"><table className="ch-community-table"><thead><tr><th>Produkt</th><th>Kategoria</th><th>Cena</th><th>Status</th><th>Właściciele</th><th></th></tr></thead><tbody>
-      {products.data.items.map(p => <tr key={p.id}><td>{p.name}</td><td>{kindLabel[p.kind]}</td><td>{number(p.price_cc)} CC</td><td>{p.is_active ? 'Aktywny' : 'Nieaktywny'}</td><td>{number(p.owners)}</td><td>{editing === p.id ? <ProductEditor product={p} onSaved={() => { setEditing(null); setRevision(v => v + 1) }}/> : <button onClick={() => setEditing(p.id)}>Edytuj</button>}</td></tr>)}
+    <ShopState resource={products}>{products.data && <><div className="ch-community-table-wrap"><table className="ch-community-table"><thead><tr><th>Produkt</th><th>Kategoria / rzadkość</th><th>Cena</th><th>Status</th><th>Właściciele</th><th></th></tr></thead><tbody>
+      {products.data.items.map(p => <tr key={p.id}><td>{p.name}</td><td>{kindLabel[p.kind]}<br/><Rarity product={p}/></td><td>{p.price_cc == null ? 'Brak ceny' : `${number(p.price_cc)} CC`}</td><td>{p.needs_review ? <span title={p.review_reason || ''}>Do weryfikacji: {p.review_reason}</span> : p.is_active ? 'Aktywny' : 'Nieaktywny'}</td><td>{number(p.owners)}</td><td>{editing === p.id ? <ProductEditor product={p} onSaved={() => { setEditing(null); setRevision(v => v + 1) }}/> : <button onClick={() => setEditing(p.id)}>Edytuj</button>}</td></tr>)}
     </tbody></table></div>
     <div className="ch-community-pager"><button disabled={page <= 1} onClick={() => setPage(page - 1)}>Poprzednia</button><span>Strona {page} · {products.data.total} produktów</span><button disabled={page * products.data.page_size >= products.data.total} onClick={() => setPage(page + 1)}>Następna</button></div></>}</ShopState>
   </section>

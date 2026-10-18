@@ -11,16 +11,25 @@ if (!defined('DB_AUTO_MIGRATE')) { define('DB_AUTO_MIGRATE', false); }
 $api = is_dir(__DIR__ . '/../backend') ? __DIR__ . '/../backend' : __DIR__ . '/../public/api';
 require_once $api . '/class/Security.php';
 require_once $api . '/class/CloudHubShopPricing.php';
-$products = CloudHubShopPricing::catalog(wp_catalog('weapons.json'), wp_catalog('data/skins_en.json'), wp_catalog('data/gloves_en.json'));
+$products = CloudHubShopPricing::catalog(wp_catalog('weapons.json'), wp_catalog('data/skins_en.json'), wp_catalog('data/gloves_en.json'), wp_catalog('data/shop_rarity.json'));
 $summary = [];
 foreach ($products as $p) {
-    $s = &$summary[$p['kind']];
+    $s = &$summary[$p['kind'] . ' / ' . ($p['rarity'] ?? 'unknown')];
     $s['count'] = ($s['count'] ?? 0) + 1;
-    $s['min'] = min($s['min'] ?? PHP_INT_MAX, $p['price_cc']);
-    $s['max'] = max($s['max'] ?? 0, $p['price_cc']);
+    $s['review'] = ($s['review'] ?? 0) + (int)$p['needs_review'];
+    if ($p['price_cc'] !== null) {
+        $s['min'] = min($s['min'] ?? PHP_INT_MAX, $p['price_cc']);
+        $s['max'] = max($s['max'] ?? 0, $p['price_cc']);
+    }
     unset($s);
 }
-foreach ($summary as $kind => $s) printf("%-12s %5d products, %d-%d CC\n", $kind, $s['count'], $s['min'], $s['max']);
+ksort($summary);
+printf("%-26s %8s %8s %12s %18s\n", 'kind / rarity', 'products', 'review', 'price CC', 'matches @66 CC');
+foreach ($summary as $key => $s) {
+    $range = isset($s['min']) ? "{$s['min']}-{$s['max']}" : '-';
+    $matches = isset($s['min']) ? CloudHubShopPricing::matchesToBuy($s['min'], 66) . '-' . CloudHubShopPricing::matchesToBuy($s['max'], 66) : '-';
+    printf("%-26s %8d %8d %12s %18s\n", $key, $s['count'], $s['review'], $range, $matches);
+}
 if (in_array('--simulate', $args, true)) {
     foreach (['current (migration 002)' => CloudHubShopPricing::RULES_CURRENT, 'spec 13.1 proposal' => CloudHubShopPricing::RULES_SPEC_13_1] as $label => $rules) {
         echo "\nRules: $label — per 24-round, 40-minute match (hourly caps applied)\n";

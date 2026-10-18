@@ -45,7 +45,9 @@ final class CloudHubShop {
         if (array_diff(array_keys($input),$allowed)) throw new InvalidArgumentException('Unsupported field');
     }
     private static function product(array $row): array {
-        $out=['id'=>(int)$row['id'],'kind'=>$row['kind'],'weapon_defindex'=>(int)$row['weapon_defindex'],'paint_id'=>(int)$row['paint_id'],'name'=>$row['name'],'price_cc'=>(int)$row['price_cc']];
+        $out=['id'=>(int)$row['id'],'kind'=>$row['kind'],'weapon_defindex'=>(int)$row['weapon_defindex'],'paint_id'=>(int)$row['paint_id'],'name'=>$row['name'],'price_cc'=>$row['price_cc']===null?null:(int)$row['price_cc']];
+        foreach (['rarity','phase'] as $k) if (array_key_exists($k,$row)) $out[$k]=$row[$k];
+        if (array_key_exists('needs_review',$row)) { $out['needs_review']=(bool)$row['needs_review']; $out['review_reason']=$row['review_reason']; $out['finish']=$row['finish']; }
         if (array_key_exists('owned',$row)) $out['owned']=(bool)$row['owned'];
         if (array_key_exists('is_active',$row)) $out['is_active']=(bool)$row['is_active'];
         return $out;
@@ -66,12 +68,16 @@ final class CloudHubShop {
             if (strlen($search)>64 || preg_match('//u',$search)!==1) throw new InvalidArgumentException('Invalid search');
             $where[]="p.name LIKE ? ESCAPE '!'"; $args[]='%'.str_replace(['!','%','_'],['!!','!%','!_'],$search).'%';
         }
+        if ($owner && ($q['review']??'')!=='') {
+            if ($q['review']!=='1') throw new InvalidArgumentException('Invalid review filter');
+            $where[]='p.needs_review=1';
+        }
         if ($owner && ($q['active']??'')!=='') {
             if (!in_array($q['active'],['0','1'],true)) throw new InvalidArgumentException('Invalid active filter');
             $where[]='p.is_active=?'; $args[]=(int)$q['active'];
         }
         $order=match($q['sort']??'price_asc') {
-            'price_asc'=>'p.price_cc ASC,p.id ASC','price_desc'=>'p.price_cc DESC,p.id ASC','name'=>'p.name ASC,p.id ASC',
+            'price_asc'=>'p.price_cc IS NULL,p.price_cc ASC,p.id ASC','price_desc'=>'p.price_cc DESC,p.id ASC','name'=>'p.name ASC,p.id ASC',
             default=>throw new InvalidArgumentException('Invalid sort'),
         };
         $page=filter_var($q['page']??'1',FILTER_VALIDATE_INT,['options'=>['min_range'=>1,'max_range'=>1000]]);
@@ -84,13 +90,13 @@ final class CloudHubShop {
         $where[]='p.is_active=1';
         $sql=' FROM cloudhub_shop_products p WHERE '.implode(' AND ',$where);
         $total=(int)$this->q('SELECT COUNT(*)'.$sql,$args)->fetchColumn();
-        $rows=$this->q('SELECT p.id,p.kind,p.weapon_defindex,p.paint_id,p.name,p.price_cc,EXISTS(SELECT 1 FROM cloudhub_player_inventory i WHERE i.steamid=? AND i.product_id=p.id) owned'.$sql.' ORDER BY '.$order.' LIMIT '.self::PAGE.' OFFSET '.(($page-1)*self::PAGE),array_merge([$viewer??''],$args))->fetchAll(PDO::FETCH_ASSOC);
+        $rows=$this->q('SELECT p.id,p.kind,p.weapon_defindex,p.paint_id,p.name,p.price_cc,p.rarity,p.phase,EXISTS(SELECT 1 FROM cloudhub_player_inventory i WHERE i.steamid=? AND i.product_id=p.id) owned'.$sql.' ORDER BY '.$order.' LIMIT '.self::PAGE.' OFFSET '.(($page-1)*self::PAGE),array_merge([$viewer??''],$args))->fetchAll(PDO::FETCH_ASSOC);
         return ['items'=>array_map([self::class,'product'],$rows),'total'=>$total,'page'=>$page,'page_size'=>self::PAGE,'purchases_enabled'=>self::purchasesEnabled()];
     }
     /** Session-owned list; includes items whose product was later deactivated. */
     public function inventory(string $steamid): array {
         CloudHubAccounts::steamId($steamid);
-        $rows=$this->q('SELECT p.id,p.kind,p.weapon_defindex,p.paint_id,p.name,p.price_cc,i.source,i.acquired_at FROM cloudhub_player_inventory i JOIN cloudhub_shop_products p ON p.id=i.product_id WHERE i.steamid=? ORDER BY i.acquired_at DESC,p.id DESC LIMIT 5000',[$steamid])->fetchAll(PDO::FETCH_ASSOC);
+        $rows=$this->q('SELECT p.id,p.kind,p.weapon_defindex,p.paint_id,p.name,p.price_cc,p.rarity,p.phase,i.source,i.acquired_at FROM cloudhub_player_inventory i JOIN cloudhub_shop_products p ON p.id=i.product_id WHERE i.steamid=? ORDER BY i.acquired_at DESC,p.id DESC LIMIT 5000',[$steamid])->fetchAll(PDO::FETCH_ASSOC);
         return ['items'=>array_map(fn($r)=>self::product($r)+['source'=>$r['source'],'acquired_at'=>$r['acquired_at']],$rows)];
     }
     public function purchases(string $steamid,?string $before): array {
@@ -118,8 +124,8 @@ final class CloudHubShop {
                 $this->db->commit();
                 return ['status'=>'duplicate','purchase_id'=>(string)$old['id'],'balance'=>(string)$before,'price_cc'=>(int)$old['price_cc']];
             }
-            $product=$this->q('SELECT id,kind,weapon_defindex,paint_id,name,price_cc,is_active FROM cloudhub_shop_products WHERE id=? LOCK IN SHARE MODE',[$productId])->fetch(PDO::FETCH_ASSOC);
-            if (!$product || !(int)$product['is_active']) throw new CloudHubShopError('Produkt jest niedostępny.',404);
+            $product=$this->q('SELECT id,kind,weapon_defindex,paint_id,name,price_cc,rarity,phase,is_active FROM cloudhub_shop_products WHERE id=? LOCK IN SHARE MODE',[$productId])->fetch(PDO::FETCH_ASSOC);
+            if (!$product || !(int)$product['is_active'] || $product['price_cc']===null) throw new CloudHubShopError('Produkt jest niedostępny.',404);
             $price=(int)$product['price_cc'];
             if ($expected!==null && $expected!==$price) throw new CloudHubShopError('Cena produktu zmieniła się. Odśwież sklep.',409);
             if ($this->q('SELECT 1 FROM cloudhub_player_inventory WHERE steamid=? AND product_id=? FOR UPDATE',[$steamid,$productId])->fetchColumn()) throw new CloudHubShopError('Masz już ten przedmiot.',409);
@@ -142,10 +148,11 @@ final class CloudHubShop {
         [$where,$args,$order,$page]=self::filters($q,true);
         $sql=' FROM cloudhub_shop_products p'.($where?' WHERE '.implode(' AND ',$where):'');
         $total=(int)$this->q('SELECT COUNT(*)'.$sql,$args)->fetchColumn();
-        $rows=$this->q('SELECT p.id,p.kind,p.weapon_defindex,p.paint_id,p.name,p.price_cc,p.is_active,(SELECT COUNT(*) FROM cloudhub_player_inventory i WHERE i.product_id=p.id) owners'.$sql.' ORDER BY '.$order.' LIMIT '.self::PAGE.' OFFSET '.(($page-1)*self::PAGE),$args)->fetchAll(PDO::FETCH_ASSOC);
+        $rows=$this->q('SELECT p.id,p.kind,p.weapon_defindex,p.paint_id,p.name,p.price_cc,p.rarity,p.phase,p.finish,p.is_active,p.needs_review,p.review_reason,(SELECT COUNT(*) FROM cloudhub_player_inventory i WHERE i.product_id=p.id) owners'.$sql.' ORDER BY '.$order.' LIMIT '.self::PAGE.' OFFSET '.(($page-1)*self::PAGE),$args)->fetchAll(PDO::FETCH_ASSOC);
         return ['items'=>array_map(fn($r)=>self::product($r)+['owners'=>(int)$r['owners']],$rows),'total'=>$total,'page'=>$page,'page_size'=>self::PAGE];
     }
-    /** OWNER price/activity change. Idempotent per (OWNER, request_id); price history keeps every change. */
+    /** OWNER price/activity change. Idempotent per (OWNER, request_id); price history keeps every change.
+     *  An explicit OWNER price is a completed review, so it clears needs_review. */
     public function setProduct(string $actor,array $input): array {
         $this->owner($actor);
         self::fields($input,['product_id','price_cc','is_active','reason','request_id']);
@@ -155,20 +162,20 @@ final class CloudHubShop {
         $this->db->beginTransaction();
         try {
             $this->owner($actor,true);
-            $row=$this->q('SELECT id,kind,weapon_defindex,paint_id,name,price_cc,is_active FROM cloudhub_shop_products WHERE id=? FOR UPDATE',[$id])->fetch(PDO::FETCH_ASSOC);
+            $row=$this->q('SELECT id,kind,weapon_defindex,paint_id,name,price_cc,rarity,phase,finish,is_active,needs_review,review_reason FROM cloudhub_shop_products WHERE id=? FOR UPDATE',[$id])->fetch(PDO::FETCH_ASSOC);
             if (!$row) throw new CloudHubShopError('Produkt nie istnieje.',404);
-            $metadata=json_encode(['request_id'=>$request,'product_id'=>$id,'old_price_cc'=>(int)$row['price_cc'],'new_price_cc'=>$price,'old_active'=>(int)$row['is_active'],'new_active'=>$active],JSON_THROW_ON_ERROR);
+            $metadata=json_encode(['request_id'=>$request,'product_id'=>$id,'old_price_cc'=>$row['price_cc']===null?null:(int)$row['price_cc'],'new_price_cc'=>$price,'old_active'=>(int)$row['is_active'],'new_active'=>$active],JSON_THROW_ON_ERROR);
             $old=$this->q('SELECT product_id,new_price_cc,new_active,reason FROM cloudhub_shop_price_history WHERE actor_steamid=? AND request_id=? FOR UPDATE',[$actor,$request])->fetch(PDO::FETCH_ASSOC);
             if ($old) {
                 if ((int)$old['product_id']!==$id || (int)$old['new_price_cc']!==$price || (int)$old['new_active']!==$active || $old['reason']!==$reason) throw new CloudHubShopError('Request ID reused with different content',409);
                 $this->db->commit();
                 return ['status'=>'duplicate','product'=>self::product($row)];
             }
-            $this->q('UPDATE cloudhub_shop_products SET price_cc=?,is_active=?,updated_at=UTC_TIMESTAMP(6) WHERE id=?',[$price,$active,$id]);
+            $this->q('UPDATE cloudhub_shop_products SET price_cc=?,is_active=?,needs_review=0,review_reason=NULL,updated_at=UTC_TIMESTAMP(6) WHERE id=?',[$price,$active,$id]);
             $this->q('INSERT INTO cloudhub_shop_price_history(product_id,old_price_cc,new_price_cc,old_active,new_active,actor_steamid,request_id,reason,created_at) VALUES (?,?,?,?,?,?,?,?,UTC_TIMESTAMP(6))',[$id,$row['price_cc'],$price,$row['is_active'],$active,$actor,$request,$reason]);
             $this->q("INSERT INTO cloudhub_admin_audit_logs(actor_steamid,action,reason,metadata_json,created_at) VALUES (?,'shop.product',?,?,UTC_TIMESTAMP(6))",[$actor,$reason,$metadata]);
             $this->db->commit();
-            return ['status'=>'applied','product'=>self::product(['price_cc'=>$price,'is_active'=>$active]+$row)];
+            return ['status'=>'applied','product'=>self::product(['price_cc'=>$price,'is_active'=>$active,'needs_review'=>0,'review_reason'=>null]+$row)];
         } catch (Throwable $e) { if ($this->db->inTransaction()) $this->db->rollBack(); throw $e; }
     }
     public function priceHistory(string $actor,string $product): array {
@@ -190,12 +197,13 @@ final class CloudHubShop {
             'spent_cc'=>$one('SELECT SUM(price_cc) FROM cloudhub_shop_purchases'),
             'products'=>$one('SELECT COUNT(*) FROM cloudhub_shop_products'),
             'active_products'=>$one('SELECT COUNT(*) FROM cloudhub_shop_products WHERE is_active=1'),
+            'review_products'=>$one('SELECT COUNT(*) FROM cloudhub_shop_products WHERE needs_review=1'),
             'sources'=>array_map(fn($r)=>['source'=>$r['source'],'earned'=>(string)$r['earned'],'spent'=>(string)$r['spent']],$sources),
             'round_cc_7d'=>(string)$week['cc'],'earning_players_7d'=>(int)$week['players'],
             'purchases_enabled'=>self::purchasesEnabled(),
         ];
     }
-    /** CLI seeding: inserts missing products only, never changes OWNER prices. */
+    /** CLI seeding: inserts missing products only, never changes OWNER prices. --activate skips items needing review. */
     public function seed(array $products,bool $activate,bool $apply): array {
         if (PHP_SAPI!=='cli') throw new LogicException('CLI only');
         $existing=[];
@@ -204,15 +212,16 @@ final class CloudHubShop {
         if ($apply && $new) {
             $this->db->beginTransaction();
             try {
-                $ins=$this->db->prepare('INSERT INTO cloudhub_shop_products(kind,weapon_defindex,paint_id,name,price_cc,is_active,created_at,updated_at) VALUES (?,?,?,?,?,?,UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))');
+                $ins=$this->db->prepare('INSERT INTO cloudhub_shop_products(kind,weapon_defindex,paint_id,name,rarity,phase,finish,price_cc,is_active,needs_review,review_reason,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))');
                 $hist=$this->db->prepare("INSERT INTO cloudhub_shop_price_history(product_id,new_price_cc,new_active,reason,created_at) VALUES (?,?,?,'Catalog proposal (CLI)',UTC_TIMESTAMP(6))");
                 foreach ($new as $p) {
-                    $ins->execute([$p['kind'],$p['weapon_defindex'],$p['paint_id'],$p['name'],$p['price_cc'],(int)$activate]);
-                    $hist->execute([$this->db->lastInsertId(),$p['price_cc'],(int)$activate]);
+                    $on=(int)($activate && !$p['needs_review'] && $p['price_cc']!==null);
+                    $ins->execute([$p['kind'],$p['weapon_defindex'],$p['paint_id'],$p['name'],$p['rarity'],$p['phase'],$p['finish'],$p['price_cc'],$on,(int)$p['needs_review'],$p['review_reason']]);
+                    $hist->execute([$this->db->lastInsertId(),$p['price_cc'],$on]);
                 }
                 $this->db->commit();
             } catch (Throwable $e) { if ($this->db->inTransaction()) $this->db->rollBack(); throw $e; }
         }
-        return ['catalog'=>count($products),'existing'=>count($products)-count($new),'new'=>count($new),'applied'=>$apply];
+        return ['catalog'=>count($products),'existing'=>count($products)-count($new),'new'=>count($new),'review'=>count(array_filter($new,fn($p)=>$p['needs_review'])),'applied'=>$apply];
     }
 }

@@ -1,24 +1,26 @@
 <?php
 /**
  * Deterministic price proposal and earning simulation. No database access.
- * Prices are proposals for OWNER review; the catalog has no rarity data, so tiers
- * use weapon class, knife model and glove family only. Every price stays editable.
+ * Rarity and Doppler phase come from shop_rarity.json (pinned ByMykel/CSGO-API snapshot of CS2 game data).
+ * Items without reliable data get no price and are flagged for OWNER review. Every price stays editable.
+ * Float, pattern seed, StatTrak and stickers are free personalization (spec §10) and never affect the price.
  */
 final class CloudHubShopPricing {
-    private const WEAPON = [
-        'ak47'=>400,'m4a1'=>400,'m4a1_silencer'=>400,'awp'=>600,
-        'deagle'=>200,'usp_silencer'=>150,'glock'=>150,'hkp2000'=>120,
-        'famas'=>150,'galilar'=>150,'aug'=>200,'sg556'=>200,'ssg08'=>200,
-        'g3sg1'=>150,'scar20'=>150,'p90'=>150,'mp9'=>120,'mac10'=>120,
-    ];
-    private const CATEGORY = ['Rifle'=>250,'Sniper'=>200,'Pistol'=>100,'PM'=>100,'Shotgun'=>80,'Machine Gun'=>80];
-    private const KNIFE_TIER = [
+    /** Official grades of the specific finish, not the weapon model. */
+    public const RARITY = ['consumer'=>50,'industrial'=>80,'mil_spec'=>120,'restricted'=>250,'classified'=>500,'covert'=>1000,'contraband'=>2500];
+    /** Most played weapons: a small, documented premium; never applied to knives or gloves. */
+    private const POPULAR = [7=>1.2,16=>1.2,60=>1.2,9=>1.2,1=>1.2,61=>1.2,4=>1.2];
+    /** Knife model base for finished knives; a vanilla knife (paint 0) costs the floor price. */
+    private const KNIFE_MODEL = [
         'knife_karambit'=>2200,'knife_butterfly'=>2200,'knife_m9_bayonet'=>2200,
         'bayonet'=>1900,'knife_skeleton'=>1900,'knife_stiletto'=>1900,'knife_widowmaker'=>1900,'knife_ursus'=>1900,'knife_tactical'=>1800,'knife_flip'=>1800,
     ];
     private const KNIFE_DEFAULT = 1600;
     private const KNIFE_VANILLA = 1500;
     private const GLOVE_FAMILY = [5030=>2200,5034=>2000,5033=>1900,5031=>1800,5035=>1700,5027=>1700,4725=>1700,5032=>1600];
+    /** Phases are separate paint indexes in game data, so each phase is its own product. */
+    private const PHASE_PREMIUM = ['Phase 1'=>200,'Phase 3'=>200,'Phase 2'=>400,'Phase 4'=>400,'Black Pearl'=>1000,'Ruby'=>1400,'Sapphire'=>1400,'Emerald'=>1600];
+    public const MAX_PRICE = 5000;
 
     /** Reward rules seeded by migration 002 (the values the backend applies today). */
     public const RULES_CURRENT = [
@@ -28,38 +30,63 @@ final class CloudHubShopPricing {
     /** Starting values from the newer spec §13.1, to simulate only; MVP and round loss are not yet sent by the plugin. */
     public const RULES_SPEC_13_1 = ['kill_cc'=>3,'death_rp'=>-3,'mvp_rp'=>8,'mvp_cc'=>5,'round_loss_rp'=>-2] + self::RULES_CURRENT;
 
-    public static function proposedPrice(string $kind, string $weapon, string $category, int $paint, int $defindex): int {
-        return match($kind) {
-            'weapon_skin'=>self::WEAPON[$weapon] ?? self::CATEGORY[$category] ?? throw new InvalidArgumentException('Unknown weapon class'),
-            'knife'=>$paint===0 ? self::KNIFE_VANILLA : (self::KNIFE_TIER[$weapon] ?? self::KNIFE_DEFAULT),
-            'glove'=>self::GLOVE_FAMILY[$defindex] ?? throw new InvalidArgumentException('Unknown glove family'),
-            default=>throw new InvalidArgumentException('Unknown product kind'),
-        };
+    private static function round10(float $v): int { return (int)(round($v/10)*10); }
+
+    /** @return array{price_cc:?int,needs_review:bool,review_reason:?string} */
+    public static function propose(string $kind, string $weapon, int $defindex, int $paint, ?array $meta): array {
+        $review=fn(string $why)=>['price_cc'=>null,'needs_review'=>true,'review_reason'=>$why];
+        if ($kind==='knife' && $paint===0) return ['price_cc'=>self::KNIFE_VANILLA,'needs_review'=>false,'review_reason'=>null];
+        if ($meta===null) return $review('Brak danych o rzadkości w katalogu gry');
+        $phase=$meta['phase'];
+        if ($phase!==null && !isset(self::PHASE_PREMIUM[$phase])) return $review('Nieznana faza: '.$phase);
+        if ($kind==='weapon_skin') {
+            if ($meta['rarity']==='contraband') return ['price_cc'=>self::RARITY['contraband'],'needs_review'=>true,'review_reason'=>'Contraband: przedmiot wycofany, wymaga decyzji OWNER'];
+            if (!isset(self::RARITY[$meta['rarity']])) return $review('Nietypowa rzadkość broni: '.$meta['rarity']);
+            $price=self::RARITY[$meta['rarity']]*(self::POPULAR[$defindex] ?? 1);
+            if ($phase==='Emerald') $price*=1.5;
+            return ['price_cc'=>min(self::MAX_PRICE,self::round10($price)),'needs_review'=>false,'review_reason'=>null];
+        }
+        if ($kind==='knife') {
+            if ($meta['rarity']!=='covert') return $review('Nietypowa rzadkość noża: '.$meta['rarity']);
+            $price=(self::KNIFE_MODEL[$weapon] ?? self::KNIFE_DEFAULT)+($phase!==null ? self::PHASE_PREMIUM[$phase] : 0);
+            return ['price_cc'=>min(self::MAX_PRICE,$price),'needs_review'=>false,'review_reason'=>null];
+        }
+        if ($kind==='glove') {
+            if ($meta['rarity']!=='extraordinary') return $review('Nietypowa rzadkość rękawic: '.$meta['rarity']);
+            if (!isset(self::GLOVE_FAMILY[$defindex])) return $review('Nieznana rodzina rękawic');
+            return ['price_cc'=>self::GLOVE_FAMILY[$defindex],'needs_review'=>false,'review_reason'=>null];
+        }
+        throw new InvalidArgumentException('Unknown product kind');
     }
 
     /** Products derivable from the bundled WeaponPaints catalog. Default (paint 0) weapons are free and never sold. */
-    public static function catalog(array $weapons, array $skins, array $gloves): array {
-        $byId=[];
+    public static function catalog(array $weapons, array $skins, array $gloves, array $rarity): array {
+        $byId=[]; $meta=[];
         foreach ($weapons as $w) if (is_int($w['cs2_id'] ?? null) && $w['cs2_id']>0) $byId[$w['cs2_id']]=$w;
+        foreach ($rarity['items'] ?? [] as $r) $meta[(int)$r['weapon_defindex'].':'.(int)$r['paint_id']]=$r;
         $out=[];
+        $add=function(string $kind,int $def,int $paint,string $weapon,string $name)use(&$out,$meta){
+            $m=$meta["$def:$paint"] ?? null;
+            $out[]=['kind'=>$kind,'weapon_defindex'=>$def,'paint_id'=>$paint,'name'=>self::name($name),'rarity'=>$m['rarity'] ?? null,'phase'=>$m['phase'] ?? null,'finish'=>isset($m['finish']) ? self::name($m['finish'],64) : null]+self::propose($kind,$weapon,$def,$paint,$m);
+        };
         foreach ($skins as $s) {
             $def=(int)$s['weapon_defindex']; $paint=(int)$s['paint']; $w=$byId[$def] ?? null;
             if ($w===null) continue;
             $kind=$w['category']==='Knife' ? 'knife' : 'weapon_skin';
             if ($kind==='weapon_skin' && $paint===0) continue;
-            $out[]=['kind'=>$kind,'weapon_defindex'=>$def,'paint_id'=>$paint,'name'=>self::name($s['paint_name']),'price_cc'=>self::proposedPrice($kind,$w['name'],$w['category'],$paint,$def)];
+            $add($kind,$def,$paint,$w['name'],$s['paint_name']);
         }
         foreach ($gloves as $g) {
             $def=(int)$g['weapon_defindex']; $paint=(int)$g['paint'];
             if ($def===0 || $paint===0) continue;
-            $out[]=['kind'=>'glove','weapon_defindex'=>$def,'paint_id'=>$paint,'name'=>self::name($g['paint_name']),'price_cc'=>self::proposedPrice('glove','','',$paint,$def)];
+            $add('glove',$def,$paint,'',$g['paint_name']);
         }
         return $out;
     }
 
-    private static function name(string $name): string {
+    private static function name(string $name, int $max=128): string {
         $name=trim(preg_replace('/\s+/u',' ',$name) ?? '');
-        if ($name==='' || preg_match('//u',$name)!==1 || preg_match_all('/./us',$name)>128) throw new InvalidArgumentException('Invalid catalog name');
+        if ($name==='' || preg_match('//u',$name)!==1 || preg_match_all('/./us',$name)>$max) throw new InvalidArgumentException('Invalid catalog name');
         return $name;
     }
 

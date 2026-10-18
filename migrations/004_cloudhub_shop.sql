@@ -1,23 +1,31 @@
 -- Additive, restartable. WeaponPaints wp_* tables and saved skins are not touched.
 -- Products start inactive; prices are proposals until the OWNER activates them.
+-- Items without reliable rarity data have no price and needs_review=1; they can never be active unpriced.
 CREATE TABLE IF NOT EXISTS cloudhub_shop_products (
  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
  kind ENUM('weapon_skin','knife','glove') NOT NULL,
  weapon_defindex INT UNSIGNED NOT NULL,
  paint_id INT UNSIGNED NOT NULL,
  name VARCHAR(128) NOT NULL,
- price_cc INT UNSIGNED NOT NULL CHECK (price_cc BETWEEN 1 AND 1000000),
+ rarity ENUM('consumer','industrial','mil_spec','restricted','classified','covert','contraband','extraordinary') NULL,
+ phase VARCHAR(32) NULL,
+ finish VARCHAR(64) NULL,
+ price_cc INT UNSIGNED NULL CHECK (price_cc IS NULL OR price_cc BETWEEN 1 AND 1000000),
  is_active TINYINT(1) NOT NULL DEFAULT 0,
+ needs_review TINYINT(1) NOT NULL DEFAULT 0,
+ review_reason VARCHAR(160) NULL,
+ CHECK (is_active=0 OR (price_cc IS NOT NULL AND needs_review=0)),
  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
  updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
  UNIQUE KEY uq_shop_item(weapon_defindex,paint_id),
- INDEX idx_shop_listing(is_active,kind,weapon_defindex,id)
+ INDEX idx_shop_listing(is_active,kind,weapon_defindex,id),
+ INDEX idx_shop_review(needs_review,id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 CREATE TABLE IF NOT EXISTS cloudhub_shop_price_history (
  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
  product_id INT UNSIGNED NOT NULL,
  old_price_cc INT UNSIGNED NULL,
- new_price_cc INT UNSIGNED NOT NULL,
+ new_price_cc INT UNSIGNED NULL,
  old_active TINYINT(1) NULL,
  new_active TINYINT(1) NOT NULL,
  actor_steamid CHAR(17) CHARACTER SET ascii COLLATE ascii_bin NULL,
