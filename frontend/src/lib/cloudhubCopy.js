@@ -31,6 +31,10 @@ export function cloudhubCopy(locale) {
         shopOwned: "Posiadasz",
         shopPriceTitle: "Cena w sklepie Cloud Coins. Personalizacja jest darmowa.",
         shopOwnedTitle: "Masz ten przedmiot na stałe. Personalizacja jest darmowa.",
+        shopLocked: "Kup:",
+        shopLockedTitle: "Podgląd jest dostępny, ale zapis wymaga zakupu w sklepie Cloud Coins.",
+        shopUnavailable: "Niedostępny",
+        shopUnavailableTitle: "Tego przedmiotu nie można teraz kupić, więc nie da się go zapisać.",
         saving: "Zapisywanie…",
         loginTitle: "Twój arsenał.\nBez kompromisów.",
         loginSub:
@@ -96,6 +100,10 @@ export function cloudhubCopy(locale) {
         shopOwned: "Owned",
         shopPriceTitle: "Cloud Coins shop price. Personalization is free.",
         shopOwnedTitle: "You own this item permanently. Personalization is free.",
+        shopLocked: "Buy:",
+        shopLockedTitle: "Preview works, but saving requires buying it in the Cloud Coins shop.",
+        shopUnavailable: "Unavailable",
+        shopUnavailableTitle: "This item cannot be bought right now, so it cannot be saved.",
         saving: "Saving…",
         loginTitle: "Your arsenal.\nNo compromises.",
         loginSub:

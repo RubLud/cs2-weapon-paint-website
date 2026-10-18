@@ -865,3 +865,7 @@
   background: #2f6b4f40;
   color: #9cdbbe;
 }
+.skin-shop-badge--locked {
+  background: #7a2f2f40;
+  color: #f0a8a8;
+}

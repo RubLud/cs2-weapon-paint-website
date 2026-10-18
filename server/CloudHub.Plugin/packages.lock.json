@@ -392,6 +392,9 @@
       },
       "cloudhub.core": {
         "type": "Project"
+      },
+      "cloudhub.ownership.contracts": {
+        "type": "Project"
       }
     }
   }

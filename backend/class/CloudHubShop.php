@@ -2,18 +2,32 @@
 require_once __DIR__.'/CloudHubAccounts.php';
 require_once __DIR__.'/CloudHubAdmin.php';
 require_once __DIR__.'/CloudHubShopPricing.php';
+require_once __DIR__.'/CloudHubOwnership.php';
 class CloudHubShopError extends RuntimeException {
     public function __construct(string $message, public int $status=409) { parent::__construct($message); }
 }
 /**
  * Cloud Coins shop. Buying grants permanent ownership of a base skin, knife or gloves;
- * personalization in WeaponPaints stays free. Ownership is not enforced here (Stage 6).
+ * personalization in WeaponPaints stays free. Enforcement lives in CloudHubOwnership (Stage 6); items players
+ * already had before enforcement (legacy snapshot) count as owned here too, so they show as owned and cannot be bought twice.
  * Lock order for purchases: wallet row (X), then product row (S). Price edits lock only the product.
  */
 final class CloudHubShop {
     private const PAGE=48;
     public function __construct(private PDO $db) {}
     private function q(string $sql,array $args=[]): PDOStatement { $s=$this->db->prepare($sql); $s->execute($args); return $s; }
+    private ?bool $legacy=null;
+    /** Migration 005 adds legacy ownership; before it the shop works on purchases alone. */
+    private function legacy(): bool {
+        if ($this->legacy===null) { try { $this->legacy=(bool)$this->db->query("SELECT 1 FROM cloudhub_schema_migrations WHERE version='005_cloudhub_ownership.sql'")->fetchColumn(); } catch (PDOException) { $this->legacy=false; } }
+        return $this->legacy;
+    }
+    /** SQL for "viewer owns product p"; the viewer is a validated SteamID (or '') and is quoted, not bound. */
+    private function owned(?string $viewer): string {
+        $id=$this->db->quote($viewer??'');
+        $sql="EXISTS(SELECT 1 FROM cloudhub_player_inventory i WHERE i.steamid=$id AND i.product_id=p.id)";
+        return $this->legacy() ? "($sql OR EXISTS(SELECT 1 FROM cloudhub_legacy_ownership l WHERE l.steamid=$id AND l.weapon_defindex=p.weapon_defindex AND l.paint_id=p.paint_id))" : $sql;
+    }
     public static function enabled(): bool { return defined('CLOUDHUB_SHOP_ENABLED') && CLOUDHUB_SHOP_ENABLED===true; }
     public static function purchasesEnabled(): bool { return self::enabled() && defined('CLOUDHUB_SHOP_PURCHASES_ENABLED') && CLOUDHUB_SHOP_PURCHASES_ENABLED===true; }
     /** Flag plus applied migration 004. */
@@ -90,19 +104,24 @@ final class CloudHubShop {
         $where[]='p.is_active=1';
         $sql=' FROM cloudhub_shop_products p WHERE '.implode(' AND ',$where);
         $total=(int)$this->q('SELECT COUNT(*)'.$sql,$args)->fetchColumn();
-        $rows=$this->q('SELECT p.id,p.kind,p.weapon_defindex,p.paint_id,p.name,p.price_cc,p.rarity,p.phase,EXISTS(SELECT 1 FROM cloudhub_player_inventory i WHERE i.steamid=? AND i.product_id=p.id) owned'.$sql.' ORDER BY '.$order.' LIMIT '.self::PAGE.' OFFSET '.(($page-1)*self::PAGE),array_merge([$viewer??''],$args))->fetchAll(PDO::FETCH_ASSOC);
+        $rows=$this->q('SELECT p.id,p.kind,p.weapon_defindex,p.paint_id,p.name,p.price_cc,p.rarity,p.phase,'.$this->owned($viewer).' owned'.$sql.' ORDER BY '.$order.' LIMIT '.self::PAGE.' OFFSET '.(($page-1)*self::PAGE),$args)->fetchAll(PDO::FETCH_ASSOC);
         return ['items'=>array_map([self::class,'product'],$rows),'total'=>$total,'page'=>$page,'page_size'=>self::PAGE,'purchases_enabled'=>self::purchasesEnabled()];
     }
     /** Compact price/ownership index for the configurator: [weapon_defindex, paint_id, price_cc, owned]. Ownership only for the viewer. */
     public function prices(?string $viewer): array {
         if ($viewer!==null) CloudHubAccounts::steamId($viewer);
-        $rows=$this->q('SELECT p.weapon_defindex,p.paint_id,p.price_cc,EXISTS(SELECT 1 FROM cloudhub_player_inventory i WHERE i.steamid=? AND i.product_id=p.id) owned FROM cloudhub_shop_products p WHERE p.is_active=1 OR EXISTS(SELECT 1 FROM cloudhub_player_inventory i WHERE i.steamid=? AND i.product_id=p.id)',[$viewer??'',$viewer??''])->fetchAll(PDO::FETCH_NUM);
-        return ['items'=>array_map(fn($r)=>[(int)$r[0],(int)$r[1],$r[2]===null?null:(int)$r[2],(bool)$r[3]],$rows),'purchases_enabled'=>self::purchasesEnabled()];
+        $owned=$this->owned($viewer);
+        $rows=$this->q("SELECT p.weapon_defindex,p.paint_id,p.price_cc,$owned owned FROM cloudhub_shop_products p WHERE p.is_active=1 OR $owned")->fetchAll(PDO::FETCH_NUM);
+        return ['items'=>array_map(fn($r)=>[(int)$r[0],(int)$r[1],$r[2]===null?null:(int)$r[2],(bool)$r[3]],$rows),'purchases_enabled'=>self::purchasesEnabled(),'enforced'=>CloudHubOwnership::active($this->db)];
     }
-    /** Session-owned list; includes items whose product was later deactivated. */
+    /** Session-owned list; includes items whose product was later deactivated and legacy items from before enforcement. */
     public function inventory(string $steamid): array {
         CloudHubAccounts::steamId($steamid);
-        $rows=$this->q('SELECT p.id,p.kind,p.weapon_defindex,p.paint_id,p.name,p.price_cc,p.rarity,p.phase,i.source,i.acquired_at FROM cloudhub_player_inventory i JOIN cloudhub_shop_products p ON p.id=i.product_id WHERE i.steamid=? ORDER BY i.acquired_at DESC,p.id DESC LIMIT 5000',[$steamid])->fetchAll(PDO::FETCH_ASSOC);
+        $cols='p.id,p.kind,p.weapon_defindex,p.paint_id,p.name,p.price_cc,p.rarity,p.phase';
+        $sql="SELECT $cols,i.source,i.acquired_at FROM cloudhub_player_inventory i JOIN cloudhub_shop_products p ON p.id=i.product_id WHERE i.steamid=?";
+        $args=[$steamid];
+        if ($this->legacy()) { $sql.=" UNION ALL SELECT $cols,'legacy',l.created_at FROM cloudhub_legacy_ownership l JOIN cloudhub_shop_products p ON p.weapon_defindex=l.weapon_defindex AND p.paint_id=l.paint_id WHERE l.steamid=? AND NOT EXISTS(SELECT 1 FROM cloudhub_player_inventory i WHERE i.steamid=l.steamid AND i.product_id=p.id)"; $args[]=$steamid; }
+        $rows=$this->q($sql.' ORDER BY acquired_at DESC,id DESC LIMIT 5000',$args)->fetchAll(PDO::FETCH_ASSOC);
         return ['items'=>array_map(fn($r)=>self::product($r)+['source'=>$r['source'],'acquired_at'=>$r['acquired_at']],$rows)];
     }
     public function purchases(string $steamid,?string $before): array {
@@ -134,7 +153,8 @@ final class CloudHubShop {
             if (!$product || !(int)$product['is_active'] || $product['price_cc']===null) throw new CloudHubShopError('Produkt jest niedostępny.',404);
             $price=(int)$product['price_cc'];
             if ($expected!==null && $expected!==$price) throw new CloudHubShopError('Cena produktu zmieniła się. Odśwież sklep.',409);
-            if ($this->q('SELECT 1 FROM cloudhub_player_inventory WHERE steamid=? AND product_id=? FOR UPDATE',[$steamid,$productId])->fetchColumn()) throw new CloudHubShopError('Masz już ten przedmiot.',409);
+            if ($this->q('SELECT 1 FROM cloudhub_player_inventory WHERE steamid=? AND product_id=? FOR UPDATE',[$steamid,$productId])->fetchColumn()
+                || ($this->legacy() && $this->q('SELECT 1 FROM cloudhub_legacy_ownership WHERE steamid=? AND weapon_defindex=? AND paint_id=?',[$steamid,$product['weapon_defindex'],$product['paint_id']])->fetchColumn())) throw new CloudHubShopError('Masz już ten przedmiot.',409);
             $before=(int)$before;
             if ($before<$price) throw new CloudHubShopError('Za mało Cloud Coins.',409);
             $after=$before-$price;

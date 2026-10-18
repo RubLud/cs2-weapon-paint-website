@@ -1,0 +1,1 @@
+<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><Version>1.0.0</Version><AssemblyVersion>1.0.0.0</AssemblyVersion><Description>CloudHub ownership contract shared with the CloudHub fork of WeaponPaints. MIT licensed.</Description><PackageLicenseExpression>MIT</PackageLicenseExpression></PropertyGroup></Project>

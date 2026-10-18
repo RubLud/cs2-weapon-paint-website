@@ -1,7 +1,9 @@
 using CloudHub.Core;
+using CloudHub.Ownership;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Attributes;
+using CounterStrikeSharp.API.Core.Capabilities;
 using CounterStrikeSharp.API.Core.Attributes.Registration;
 using CounterStrikeSharp.API.Modules.Timers;
 using Microsoft.Extensions.Logging;
@@ -11,20 +13,27 @@ public sealed class CloudHubConfig : BasePluginConfig {
     public string ServerId { get; set; } = "cs2-main";
     public string Endpoint { get; set; } = "https://skins.cloudhub.autos/api/ingest.php";
     public string SecretEnvironmentVariable { get; set; } = "CLOUDHUB_EVENT_KEY";
+    // Stage 6: ownership answers for the CloudHub fork of WeaponPaints. Read-only, same server key.
+    public bool OwnershipEnabled { get; set; } = false;
+    public string OwnershipEndpoint { get; set; } = "https://skins.cloudhub.autos/api/ownership.php";
 }
 [MinimumApiVersion(376)]
 public sealed class CloudHubPlugin : BasePlugin, IPluginConfig<CloudHubConfig> {
     public override string ModuleName => "CloudHub Core";
-    public override string ModuleVersion => "0.2.0";
+    public override string ModuleVersion => "0.3.0";
     public override string ModuleAuthor => "CloudHub";
-    public override string ModuleDescription => "Opt-in signed round telemetry; no match inference or game mutations";
+    public override string ModuleDescription => "Opt-in signed round telemetry and read-only ownership answers; no match inference or game mutations";
     public CloudHubConfig Config {get;set;}=new();
     private readonly RoundTracker tracker=new();
     private DurableOutbox? outbox;
+    private OwnershipService? ownership;
+    private OwnershipCapability? capability;
     public void OnConfigParsed(CloudHubConfig config) { Config=config; }
     public override void Load(bool hotReload) {
-        if(!Config.Enabled){Logger.LogInformation("CloudHub Core is disabled");return;}
+        if(!Config.Enabled && !Config.OwnershipEnabled){Logger.LogInformation("CloudHub Core is disabled");return;}
         var secret=Environment.GetEnvironmentVariable(Config.SecretEnvironmentVariable);
+        if(Config.OwnershipEnabled)StartOwnership(secret);
+        if(!Config.Enabled)return;
         if(secret is null || secret.Length<32 || !Uri.TryCreate(Config.Endpoint,UriKind.Absolute,out var endpoint) || endpoint.Scheme!="https") {
             Logger.LogError("CloudHub disabled: HTTPS endpoint and environment secret of 32+ characters required");return;
         }
@@ -33,6 +42,18 @@ public sealed class CloudHubPlugin : BasePlugin, IPluginConfig<CloudHubConfig> {
         RegisterListener<Listeners.OnMapStart>(_=>tracker.Cancel());
         RegisterListener<Listeners.OnMapEnd>(()=>tracker.Cancel());
         AddTimer(1.0f,Sample,TimerFlags.REPEAT);
+    }
+    // Without a registered capability the WeaponPaints fork keeps every paid item locked, so failures here stay safe.
+    private void StartOwnership(string? secret) {
+        if(secret is null || secret.Length<32 || !Uri.TryCreate(Config.OwnershipEndpoint,UriKind.Absolute,out var endpoint) || endpoint.Scheme!="https") {
+            Logger.LogError("CloudHub ownership disabled: HTTPS endpoint and environment secret of 32+ characters required; paid items stay locked");return;
+        }
+        try { ownership=new OwnershipService(endpoint,Config.ServerId,secret,message=>Logger.LogWarning("CloudHub ownership: {Message}",message)); }
+        catch(Exception ex) {Logger.LogError("CloudHub ownership disabled ({Type}); paid items stay locked",ex.GetType().Name);return;}
+        var api=capability=new OwnershipCapability(ownership);
+        Capabilities.RegisterPluginCapability(new PluginCapability<ICloudHubOwnership>(CloudHubOwnershipCapability.Name),()=>api);
+        RegisterListener<Listeners.OnClientAuthorized>((_,steamId)=>ownership?.Refresh(steamId.SteamId64));
+        foreach(var p in Utilities.GetPlayers())if(p.IsValid && !p.IsBot && p.AuthorizedSteamID is {} id)ownership.Refresh(id.SteamId64);
     }
     private static string? Id(CCSPlayerController? p) {
         if(p is null || !p.IsValid || p.IsBot || p.IsHLTV)return null;
@@ -79,7 +100,7 @@ public sealed class CloudHubPlugin : BasePlugin, IPluginConfig<CloudHubConfig> {
     [GameEventHandler(HookMode.Post)]
     public HookResult Spawn(EventPlayerSpawn e,GameEventInfo info){if(outbox is null)return HookResult.Continue;var id=Id(e.Userid);if(id is not null)tracker.Spawned(id);return HookResult.Continue;}
     [GameEventHandler(HookMode.Pre)]
-    public HookResult Disconnect(EventPlayerDisconnect e,GameEventInfo info){if(outbox is null)return HookResult.Continue;var id=Id(e.Userid) ?? e.Xuid.ToString(System.Globalization.CultureInfo.InvariantCulture);tracker.Disconnected(id);return HookResult.Continue;}
+    public HookResult Disconnect(EventPlayerDisconnect e,GameEventInfo info){if(e.Userid is {IsValid:true} left)ownership?.Forget(left.SteamID);if(outbox is null)return HookResult.Continue;var id=Id(e.Userid) ?? e.Xuid.ToString(System.Globalization.CultureInfo.InvariantCulture);tracker.Disconnected(id);return HookResult.Continue;}
     [GameEventHandler(HookMode.Post)]
     public HookResult RoundEnd(EventRoundEnd e,GameEventInfo info) {
         if(outbox is null)return HookResult.Continue;
@@ -90,6 +111,8 @@ public sealed class CloudHubPlugin : BasePlugin, IPluginConfig<CloudHubConfig> {
     public override void Unload(bool hotReload) {
         tracker.Cancel();var old=outbox;outbox=null;
         if(old is not null)_=Drain(old);
+        capability?.Close();var owned=ownership;ownership=null;
+        if(owned is not null)_=owned.DisposeAsync().AsTask();
     }
     private async Task Drain(DurableOutbox old){try{await old.DisposeAsync();}catch(Exception ex){Logger.LogError("CloudHub outbox drain failed ({Type})",ex.GetType().Name);}}
 }

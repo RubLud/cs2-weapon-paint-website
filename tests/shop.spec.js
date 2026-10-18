@@ -93,6 +93,8 @@ test('Shop UI: catalog, in-app purchase confirmation, inventory and OWNER pricin
   await page.goto('/shop')
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true)
   await page.setViewportSize({width:1280,height:900})
+  // Every API response refreshes wp_session, so leave the page first: a late response must not restore the previous player.
+  await page.goto('about:blank')
   await context.clearCookies()
   await context.addCookies([{name:'wp_session',value:s[0].id,domain:'127.0.0.1',path:'/',httpOnly:true,sameSite:'Lax'}])
   await page.goto('/admin')
