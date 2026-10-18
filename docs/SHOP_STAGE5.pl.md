@@ -191,7 +191,7 @@ Rollback: wyłączenie flag ukrywa sklep. Dane zakupów i ledger pozostają; nie
 Lokalnie na Windows:
 - `pnpm lint` i `pnpm build`: PASS;
 - `php -l` dla 52 plików PHP: PASS;
-- `php tests/shop-pricing.php`: 48 asercji PASS;
+- `php tests/shop-pricing.php`: 49 asercji PASS;
 - `node scripts/sync-shop-rarity.mjs`: 2126 wpisów, suma sha256 zgodna z przypiętym commitem;
 - `bin/cloudhub-shop-catalog.php --simulate`: PASS;
 - `git diff --check`: PASS.

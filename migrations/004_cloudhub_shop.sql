@@ -1,6 +1,6 @@
 -- Additive, restartable. WeaponPaints wp_* tables and saved skins are not touched.
--- Products start inactive; prices are proposals until the OWNER activates them.
--- Items without reliable rarity data have no price and needs_review=1; they can never be active unpriced.
+-- Products start inactive. Prices are proposals until the OWNER activates them.
+-- Items without reliable rarity data have no price and needs_review=1. They can never be active unpriced.
 CREATE TABLE IF NOT EXISTS cloudhub_shop_products (
  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
  kind ENUM('weapon_skin','knife','glove') NOT NULL,

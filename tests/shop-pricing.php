@@ -66,4 +66,7 @@ $check($unknown['price_cc']===null && $unknown['needs_review'],'Missing rarity d
 $check(CloudHubShopPricing::propose('knife','knife_karambit',507,9999,['rarity'=>'covert','phase'=>'Phase 9'])['needs_review'],'Unknown phase needs review');
 $check(CloudHubShopPricing::propose('glove','',1,1,['rarity'=>'extraordinary','phase'=>null])['needs_review'],'Unknown glove family needs review');
 $check(CloudHubShopPricing::propose('knife','bayonet',500,1,['rarity'=>'classified','phase'=>null])['needs_review'],'Unexpected knife grade needs review');
+// CloudHubSchema splits migrations on ';', so a semicolon inside a comment breaks the statement.
+foreach (glob(__DIR__.'/../migrations/*.sql') as $file) foreach (file($file) as $i=>$line) if (str_starts_with(ltrim($line),'--') && str_contains($line,';')) throw new RuntimeException(basename($file).':'.($i+1).' comment contains ;');
+$check(true,'Migration comments contain no statement separator');
 fwrite(STDERR,"CloudHub shop pricing assertions passed: $n\n");
