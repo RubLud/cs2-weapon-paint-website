@@ -15,8 +15,8 @@ if ($write) {
     if ($action!=='buy') wp_json_error(405,'Nieprawidłowa metoda.');
     if ($actor===null) wp_json_error(401,'Zaloguj się przez Steam.');
     wp_require_post();
-} elseif (($_SERVER['REQUEST_METHOD']??'')!=='GET' || !in_array($action,['catalog','inventory','purchases'],true)) wp_json_error(405,'Nieprawidłowa metoda.');
-if ($action!=='catalog' && $actor===null) wp_json_error(401,'Zaloguj się przez Steam.');
+} elseif (($_SERVER['REQUEST_METHOD']??'')!=='GET' || !in_array($action,['catalog','prices','inventory','purchases'],true)) wp_json_error(405,'Nieprawidłowa metoda.');
+if (!in_array($action,['catalog','prices'],true) && $actor===null) wp_json_error(401,'Zaloguj się przez Steam.');
 require_once __DIR__.'/class/Database.php';
 $db=null;
 try {
@@ -27,6 +27,7 @@ try {
     $result=match($action) {
         'buy'=>$shop->buy($actor,$_POST),
         'catalog'=>$shop->catalog($actor,$query),
+        'prices'=>$shop->prices($actor),
         'inventory'=>$shop->inventory($actor),
         'purchases'=>$shop->purchases($actor,$_GET['before']??null),
     };

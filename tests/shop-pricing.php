@@ -19,12 +19,13 @@ $check(count(array_filter($byKind['knife'],fn($p)=>$p['paint_id']===0))>0,'Vanil
 $check(!array_filter($byKind['glove'],fn($p)=>$p['weapon_defindex']===0 || $p['paint_id']===0),'Default gloves stay free');
 $priced=fn($list)=>array_filter($list,fn($p)=>$p['price_cc']!==null);
 $check(!array_filter($priced($byKind['weapon_skin']),fn($p)=>$p['price_cc']<50 || $p['price_cc']>2500),'Weapon skin prices within 50-2500');
+$check(count(array_filter($products,fn($p)=>$p['needs_review']))===1,'Only the contraband item needs review in the bundled catalog');
 $check(!array_filter($priced(array_merge($byKind['knife'],$byKind['glove'])),fn($p)=>$p['price_cc']<1500 || $p['price_cc']>CloudHubShopPricing::MAX_PRICE),'Knife and glove prices within 1500-5000');
 $check(!array_filter($products,fn($p)=>$p['paint_id']>0 && $p['rarity']===null),'Every finished product has official rarity');
 $check(!array_filter($products,fn($p)=>$p['price_cc']===null && !$p['needs_review']),'Unpriced products are always flagged for review');
 $check(!array_filter($products,fn($p)=>$p['needs_review'] && $p['review_reason']===null),'Review flag carries a reason');
 $howl=$find(16,309);
-$check($howl['rarity']==='contraband' && $howl['needs_review'],'Contraband M4A4 | Howl needs OWNER decision');
+$check($howl['rarity']==='contraband' && $howl['needs_review'] && $howl['price_cc']===null,'M4A4 | Howl stays unsold and unpriced');
 // Same weapon, higher official grade, higher price.
 $ak=array_filter($byKind['weapon_skin'],fn($p)=>$p['weapon_defindex']===7);
 $avgBy=function($rar)use($ak){$x=array_column(array_filter($ak,fn($p)=>$p['rarity']===$rar),'price_cc');return $x?array_sum($x)/count($x):null;};

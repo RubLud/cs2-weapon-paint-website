@@ -847,3 +847,21 @@
     font-size: 0.62rem;
   }
 }
+
+/* CloudHub shop information in the skin list (informational, never blocks selection). */
+.skin-shop-badge {
+  align-self: center;
+  margin-top: 4px;
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: #f2d77318;
+  color: #f2d773;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+}
+.skin-shop-badge--owned {
+  background: #2f6b4f40;
+  color: #9cdbbe;
+}

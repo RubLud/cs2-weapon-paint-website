@@ -28,11 +28,30 @@ import { fetchJsonCached } from "../lib/dataCache";
 import { loadSiteConfig } from "../lib/siteConfig";
 import { cloudhubCopy } from "../lib/cloudhubCopy";
 import { askConfirm } from "../lib/dialogs";
+import { useShopPrices } from "../lib/shopPrices";
 import "../styles/Weapon3DPreview.css";
+
+function ShopBadge({ entry, copy, locale }) {
+  if (!entry) return null;
+  if (entry.owned)
+    return (
+      <span className="skin-shop-badge skin-shop-badge--owned" title={copy.shopOwnedTitle}>
+        {copy.shopOwned}
+      </span>
+    );
+  if (entry.price == null) return null;
+  return (
+    <span className="skin-shop-badge" title={copy.shopPriceTitle}>
+      {new Intl.NumberFormat(locale === "pl" ? "pl-PL" : "en-US").format(entry.price)} CC
+    </span>
+  );
+}
 
 export default function WeaponCustomizer({ weapon, onClose, onSave, onReset }) {
   const { t, locale } = useI18n();
   const c = cloudhubCopy(locale);
+  // Informational only: ownership is not enforced; selecting and saving work exactly as before.
+  const shopPrices = useShopPrices();
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [skins, setSkins] = useState([]);
@@ -971,6 +990,13 @@ export default function WeaponCustomizer({ weapon, onClose, onSave, onReset }) {
                       <span className="skin-button__name">
                         {skin.paint_name}
                       </span>
+                      <ShopBadge
+                        entry={shopPrices?.get(
+                          `${skin.weapon_defindex ?? weapon.cs2_id ?? weapon.defindex}:${Number(skin.paint)}`,
+                        )}
+                        copy={c}
+                        locale={locale}
+                      />
                     </button>
                   );
                 })

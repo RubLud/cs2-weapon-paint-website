@@ -131,16 +131,20 @@ $check((int)$stats['purchases']===$count('SELECT COUNT(*) FROM cloudhub_shop_pur
 $reject(fn()=>$shop->stats($a),403);
 
 // Items flagged for review are never activated automatically and need an explicit OWNER price.
-$flagged=[['kind'=>'weapon_skin','weapon_defindex'=>16,'paint_id'=>309,'name'=>'M4A4 | Howl','rarity'=>'contraband','phase'=>null,'finish'=>null,'price_cc'=>2500,'needs_review'=>true,'review_reason'=>'Contraband'],
+$flagged=[['kind'=>'weapon_skin','weapon_defindex'=>16,'paint_id'=>309,'name'=>'M4A4 | Howl','rarity'=>'contraband','phase'=>null,'finish'=>null,'price_cc'=>null,'needs_review'=>true,'review_reason'=>'Contraband'],
     ['kind'=>'weapon_skin','weapon_defindex'=>7,'paint_id'=>99999,'name'=>'Unknown fixture','rarity'=>null,'phase'=>null,'finish'=>null,'price_cc'=>null,'needs_review'=>true,'review_reason'=>'No rarity data']];
 $check($shop->seed($flagged,true,true)['review']===2,'Seed reports review items');
 $review=$shop->adminProducts($owner,['review'=>'1'])['items'];
-$check(count($review)===2 && !array_filter($review,fn($p)=>$p['is_active']) && in_array(null,array_column($review,'price_cc'),true),'--activate skips review items; unknown item stays unpriced');
-$unknownId=(string)array_values(array_filter($review,fn($p)=>$p['price_cc']===null))[0]['id'];
+$check(count($review)===2 && !array_filter($review,fn($p)=>$p['is_active']) && array_column($review,'price_cc')===[null,null],'--activate skips review items; they stay unpriced');
+$unknownId=(string)array_values(array_filter($review,fn($p)=>$p['name']==='Unknown fixture'))[0]['id'];
 try { $db->exec("UPDATE cloudhub_shop_products SET is_active=1 WHERE id=$unknownId"); $check(false,'Database must refuse an unpriced active product'); } catch (PDOException) { $check(true,'Database refuses unpriced active product'); }
 $reject(fn()=>$shop->buy($a,['product_id'=>$unknownId,'request_id'=>$uuid(20)]),404);
 $check($edit($unknownId,700,0,109)['product']['needs_review']===false && $shop->adminProducts($owner,['review'=>'1'])['total']===1,'Explicit OWNER price completes the review');
 $check($shop->catalog(null,[])['total']===5,'Review items never appear in the catalog');
+$index=$shop->prices($a)['items'];
+$check(count($index)===5 && in_array([(int)$subset[0]['weapon_defindex'],(int)$subset[0]['paint_id'],120,true],$index,true),'Configurator index: active prices and own ownership');
+$check(!array_filter($shop->prices($b)['items'],fn($r)=>$r[3]) && !array_filter($shop->prices(null)['items'],fn($r)=>$r[3]),'Configurator index never shows foreign ownership');
+$check(!in_array(309,array_column($index,1),true),'Unsold Howl absent from configurator prices');
 
 // Missing migration degrades to disabled.
 $db->exec("UPDATE cloudhub_schema_migrations SET version='004_hidden_for_test' WHERE version='004_cloudhub_shop.sql'");

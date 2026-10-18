@@ -93,6 +93,12 @@ final class CloudHubShop {
         $rows=$this->q('SELECT p.id,p.kind,p.weapon_defindex,p.paint_id,p.name,p.price_cc,p.rarity,p.phase,EXISTS(SELECT 1 FROM cloudhub_player_inventory i WHERE i.steamid=? AND i.product_id=p.id) owned'.$sql.' ORDER BY '.$order.' LIMIT '.self::PAGE.' OFFSET '.(($page-1)*self::PAGE),array_merge([$viewer??''],$args))->fetchAll(PDO::FETCH_ASSOC);
         return ['items'=>array_map([self::class,'product'],$rows),'total'=>$total,'page'=>$page,'page_size'=>self::PAGE,'purchases_enabled'=>self::purchasesEnabled()];
     }
+    /** Compact price/ownership index for the configurator: [weapon_defindex, paint_id, price_cc, owned]. Ownership only for the viewer. */
+    public function prices(?string $viewer): array {
+        if ($viewer!==null) CloudHubAccounts::steamId($viewer);
+        $rows=$this->q('SELECT p.weapon_defindex,p.paint_id,p.price_cc,EXISTS(SELECT 1 FROM cloudhub_player_inventory i WHERE i.steamid=? AND i.product_id=p.id) owned FROM cloudhub_shop_products p WHERE p.is_active=1 OR EXISTS(SELECT 1 FROM cloudhub_player_inventory i WHERE i.steamid=? AND i.product_id=p.id)',[$viewer??'',$viewer??''])->fetchAll(PDO::FETCH_NUM);
+        return ['items'=>array_map(fn($r)=>[(int)$r[0],(int)$r[1],$r[2]===null?null:(int)$r[2],(bool)$r[3]],$rows),'purchases_enabled'=>self::purchasesEnabled()];
+    }
     /** Session-owned list; includes items whose product was later deactivated. */
     public function inventory(string $steamid): array {
         CloudHubAccounts::steamId($steamid);

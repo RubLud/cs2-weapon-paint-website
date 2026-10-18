@@ -7,7 +7,7 @@
  */
 final class CloudHubShopPricing {
     /** Official grades of the specific finish, not the weapon model. */
-    public const RARITY = ['consumer'=>50,'industrial'=>80,'mil_spec'=>120,'restricted'=>250,'classified'=>500,'covert'=>1000,'contraband'=>2500];
+    public const RARITY = ['consumer'=>50,'industrial'=>80,'mil_spec'=>120,'restricted'=>250,'classified'=>500,'covert'=>1000];
     /** Most played weapons: a small, documented premium; never applied to knives or gloves. */
     private const POPULAR = [7=>1.2,16=>1.2,60=>1.2,9=>1.2,1=>1.2,61=>1.2,4=>1.2];
     /** Knife model base for finished knives; a vanilla knife (paint 0) costs the floor price. */
@@ -40,7 +40,8 @@ final class CloudHubShopPricing {
         $phase=$meta['phase'];
         if ($phase!==null && !isset(self::PHASE_PREMIUM[$phase])) return $review('Nieznana faza: '.$phase);
         if ($kind==='weapon_skin') {
-            if ($meta['rarity']==='contraband') return ['price_cc'=>self::RARITY['contraband'],'needs_review'=>true,'review_reason'=>'Contraband: przedmiot wycofany, wymaga decyzji OWNER'];
+            // OWNER decision (18.10.2026): M4A4 | Howl and any other contraband stay unsold and unpriced.
+            if ($meta['rarity']==='contraband') return $review('Contraband: wyłączony ze sprzedaży decyzją OWNER');
             if (!isset(self::RARITY[$meta['rarity']])) return $review('Nietypowa rzadkość broni: '.$meta['rarity']);
             $price=self::RARITY[$meta['rarity']]*(self::POPULAR[$defindex] ?? 1);
             if ($phase==='Emerald') $price*=1.5;

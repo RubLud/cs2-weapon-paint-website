@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { communityRequest, useCommunityResource } from '../lib/community'
 import { fetchJsonCached } from '../lib/dataCache'
 import { askConfirm } from '../lib/dialogs'
+import { invalidateShopPrices } from '../lib/shopPrices'
 import '../styles/Shop.css'
 
 const number = value => value == null ? '—' : new Intl.NumberFormat('pl-PL').format(BigInt(value))
@@ -67,6 +68,7 @@ export function ShopPage({ user }) {
       storePending(payload)
       const result = await communityRequest('shop.php?action=buy', { product_id:payload.product_id, request_id:payload.request_id, expected_price:payload.expected_price })
       storePending(null)
+      invalidateShopPrices()
       setMessage({ ok:true, text:`${result.status === 'duplicate' ? 'Zakup był już zapisany' : 'Kupiono'}: ${payload.name}. Saldo: ${number(result.balance)} CC.` })
       setRevision(v => v + 1)
     } catch (error) {

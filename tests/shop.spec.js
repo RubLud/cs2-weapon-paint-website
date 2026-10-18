@@ -47,6 +47,11 @@ test('Shop API: auth, CSRF, server price, replay, IDOR and free personalization'
   expect((await (await player.get('/api/shop.php?action=purchases')).json()).items[0].price_cc).toBe(item.price_cc)
   const ledger=(await (await player.get('/api/cloudhub.php?action=history')).json()).transactions
   expect(ledger[0]).toMatchObject({source:'shop',amount:String(-item.price_cc),balance_after:'50'})
+  // Configurator index: own ownership only, never another player's.
+  const mine=(await (await player.get('/api/shop.php?action=prices')).json()).items
+  expect(mine).toContainEqual([item.weapon_defindex,item.paint_id,item.price_cc,true])
+  expect((await (await anon.get('/api/shop.php?action=prices')).json()).items.some(r=>r[3])).toBe(false)
+  expect((await (await other.get('/api/shop.php?action=prices&steamid='+pid)).json()).items.some(r=>r[3])).toBe(false)
   // Personalization of the owned skin costs 0 CC.
   const sticker=JSON.parse(fs.readFileSync('frontend/public/data/stickers_en.json')).find(s=>Number(s.id)>0)
   const save=await post(player,'skins.php',{action:'save',team:'T',weapon_defindex:String(item.weapon_defindex),paint:String(item.paint_id),wear:'0.01',seed:'661',nametag:'Free',stattrak:'1',stattrak_count:'0',keychainId:'0',offsetX:'0',offsetY:'0',offsetZ:'0',keychainSeed:'0',weapon_sticker_0:`${sticker.id};0;0;0;0;1;0`})
@@ -99,4 +104,31 @@ test('Shop UI: catalog, in-app purchase confirmation, inventory and OWNER pricin
   await expect(shop.getByText(new Intl.NumberFormat('pl-PL').format(item.price_cc+1)+' CC')).toBeVisible()
   expect(errors).toEqual([])
   await owner.dispose()
+})
+test('Configurator: CC price and owned badge without changing selection or saving',async({page,context,playwright})=>{
+  const s=sessions(), owner=await client(playwright,0), buyer=await client(playwright,3)
+  const ak=(await (await owner.get('/api/shop.php?action=catalog&weapon=7')).json()).items[0]
+  expect(ak).toBeTruthy()
+  const finish=ak.name.split('|')[1].trim()
+  await context.addCookies([{name:'wp_session',value:s[3].id,domain:'127.0.0.1',path:'/',httpOnly:true,sameSite:'Lax'}])
+  const errors=[];page.on('pageerror',e=>errors.push(e.message))
+  const open=async()=>{
+    await page.goto('/t/rifle')
+    const consent=page.getByRole('button',{name:'Akceptuję',exact:true})
+    if (await consent.isVisible().catch(()=>false)) await consent.click()
+    await page.getByRole('searchbox',{name:'Szukaj broni lub skina…'}).fill('AK-47')
+    await page.locator('.weapon-card').click()
+    await page.locator('.wc-skins__search').fill(finish)
+    return page.locator('.skin-button',{hasText:finish}).first()
+  }
+  let skin=await open()
+  await expect(skin.locator('.skin-shop-badge')).toHaveText(new Intl.NumberFormat('pl-PL').format(ak.price_cc)+' CC')
+  await skin.click()
+  await expect(skin).toHaveClass(/selected/)
+  await credit(owner,s[3].steamid,ak.price_cc)
+  expect((await post(buyer,'shop.php?action=buy',{product_id:String(ak.id),request_id:crypto.randomUUID()})).status()).toBe(200)
+  skin=await open()
+  await expect(skin.locator('.skin-shop-badge--owned')).toHaveText('Posiadasz')
+  expect(errors).toEqual([])
+  await owner.dispose();await buyer.dispose()
 })

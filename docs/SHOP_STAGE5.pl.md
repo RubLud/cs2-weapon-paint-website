@@ -47,6 +47,10 @@ OWNER (`backend/admin.php`):
 - `/shop`: katalog z obrazami z tego samego katalogu WeaponPaints, filtry, cena, „Posiadasz”, zakup z potwierdzeniem w aplikacji (bez natywnych dialogów). UUID niepotwierdzonego zakupu jest zapisywany w `sessionStorage`; „Ponów ten sam zakup” nie obciąży dwa razy.
 - `/inventory`: posiadane przedmioty z odnośnikiem „Personalizuj za 0 CC” oraz historia zakupów.
 - `/wallet`: transakcje sklepu jako „Zakup w sklepie”.
+- **Konfigurator WeaponPaints**: na liście skinów etykieta z ceną CC albo „Posiadasz”.
+  - Dane pochodzą z `shop.php?action=prices`, jednego żądania na załadowanie strony; własność jest pokazywana tylko dla zalogowanego gracza.
+  - Etykieta jest wyłącznie informacyjna. Wybór, podgląd, zapis i reset działają jak dotąd, bez blokady (egzekwowanie własności to Etap 6).
+  - Przy wyłączonym sklepie etykiet nie ma.
 - `/admin`: sekcja „Sklep i ekonomia” (statystyki, wyszukiwanie, edycja ceny i aktywności z powodem).
 - Linki „Sklep” i „Ekwipunek” są widoczne tylko przy aktywnym module.
 
@@ -56,7 +60,7 @@ OWNER (`backend/admin.php`):
 - bez flag: dry run z tabelą kategorii;
 - `--apply`: dodaje brakujące produkty jako **nieaktywne**, istniejących cen nie zmienia;
 - `--apply --activate`: dodatkowo aktywuje nowe produkty, z wyjątkiem oczekujących na weryfikację. Tylko po zatwierdzeniu cennika;
-- `--simulate`: symulacja zarobków, bez bazy.
+- `--simulate [--cc-cap=N]`: symulacja zarobków, bez bazy. `--cc-cap` sprawdza wpływ innego limitu.
 
 Domyślne wykończenia (paint 0) broni i rękawic pozostają darmowe. Wariant bez skina noża jest produktem.
 
@@ -110,7 +114,7 @@ Wnioski:
 3. **Weryfikacja zamiast zgadywania** (`needs_review=1` z powodem w produkcie):
    - brak danych o rzadkości → **brak ceny** (`price_cc = NULL`);
    - nieznana faza lub rodzina rękawic albo nietypowy poziom → brak ceny;
-   - Contraband (M4A4 | Howl, wycofany przedmiot) → propozycja 2500 CC, ale wymaga decyzji OWNER.
+   - Contraband (M4A4 | Howl) → **wyłączony ze sprzedaży, bez ceny** (decyzja OWNER z 18.10.2026); pozostaje „Do weryfikacji”.
 
    `CHECK` w bazie nie pozwala aktywować produktu bez ceny ani oczekującego na weryfikację. `--activate` je pomija. Jawna cena zapisana przez OWNER kończy weryfikację.
 4. `/admin` pokazuje rzadkość, fazę i status „Do weryfikacji”, z filtrem i ręczną zmianą każdej ceny (historia i powód).
@@ -129,7 +133,7 @@ Liczba meczów przy ~66 CC na 40-minutowy mecz (limit 100 CC/h):
 | Skin broni / Restricted | 311 | 0 | 250–300 | 4–5 |
 | Skin broni / Classified | 183 | 0 | 500–600 | 8–10 |
 | Skin broni / Covert | 111 | 0 | 1000–1800 | 16–28 |
-| Skin broni / Contraband | 1 | 1 | 2500 (propozycja) | 38 |
+| Skin broni / Contraband | 1 | 1 | brak (poza sprzedażą) | — |
 | Noże / Covert | 576 | 0 | 1500–3800 | 23–58 |
 | Rękawice / Extraordinary | 94 | 0 | 1600–2200 | 25–34 |
 
@@ -160,9 +164,17 @@ Reguły z migracji 002:
 | Niski win rate | 204 | 66 | 2 | 7 | 31 |
 
 Wnioski do decyzji właściciela (wartości nagród **nie zostały zmienione**):
-1. Limit `hourly_cc_cap = 100` ogranicza zarobek prawie każdego profilu do ~66 CC na 40-minutowy mecz. W praktyce CC nie zależą od umiejętności. Cele czasowe §11 są spełnione: tani skin 1–3 mecze, średni 3–8, nóż/rękawice 15–35 (23–34 mecze).
+1. Limit `hourly_cc_cap = 100` (decyzja OWNER: na razie bez zmian) ogranicza zarobek prawie każdego profilu do ~66 CC na 40-minutowy mecz. W praktyce CC nie zależą od umiejętności. Cele czasowe §11 są spełnione: tani skin 1–3 mecze, średni 3–8, nóż/rękawice 15–35 (23–34 mecze).
 2. Przy tym limicie zwykłe noże i rękawice (1500–2200 CC) to 23–34 mecze. Rzadkie fazy Doppler (do 3800 CC) to do 58 meczów, a 5000 CC to 76 meczów. Rzadkie fazy mają być ambitnym celem; krótszy czas wymagałby zmiany limitu godzinowego.
 3. Wartości startowe z nowej §13.1 (MVP, przegrana runda) zmieniają RP: przeciętny 219, słaby 84 RP/mecz. Każdy profil nadal zyskuje RP. Na CC nie wpływają z powodu limitu. MVP i przegrana nie są jeszcze przesyłane przez plugin (krok CloudHub Ranks).
+
+### Status cennika (decyzja OWNER, 18.10.2026)
+
+- Cennik zaakceptowany **jako wersja testowa**. Sprzedaż dla graczy **niezatwierdzona**: produkty nieaktywne, `CLOUDHUB_SHOP_PURCHASES_ENABLED=false`.
+- Różnice według rzadkości i faz (Doppler Ruby, Sapphire, Black Pearl, Gamma Doppler) pozostają.
+- Rzadkie patterny (Blue Gem, procent Fade, Fire & Ice): pattern seed to darmowa personalizacja (§10), więc w danym wykończeniu nie ma osobnej ceny za seed. Różnicę cen niosą wykończenie i faza. Ewentualne dopłaty za wykończenia (np. Case Hardened) OWNER ustawia ręcznie po polu `finish`.
+- Przedmioty bez wiarygodnej identyfikacji pozostają „Do weryfikacji”.
+- Limit CC: `hourly_cc_cap` to wiersz w `cloudhub_reward_rules` (migracja 002). Backend czyta go przy każdym rozliczeniu rundy i waliduje w zakresie 0–100000, więc zmiana nie wymaga kodu ani nowej migracji. Edycja z poziomu WWW pozostaje wyłączona (decyzja z Etapu 3: wersjonowanie reguł). Zmiana wymaga osobnej, zatwierdzonej operacji na bazie. Symulację innego limitu daje `--cc-cap=N`.
 
 ## Wdrożenie (tylko za zgodą)
 
@@ -179,7 +191,7 @@ Rollback: wyłączenie flag ukrywa sklep. Dane zakupów i ledger pozostają; nie
 Lokalnie na Windows:
 - `pnpm lint` i `pnpm build`: PASS;
 - `php -l` dla 52 plików PHP: PASS;
-- `php tests/shop-pricing.php`: 47 asercji PASS;
+- `php tests/shop-pricing.php`: 48 asercji PASS;
 - `node scripts/sync-shop-rarity.mjs`: 2126 wpisów, suma sha256 zgodna z przypiętym commitem;
 - `bin/cloudhub-shop-catalog.php --simulate`: PASS;
 - `git diff --check`: PASS.
