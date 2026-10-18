@@ -30,7 +30,8 @@ test('Wallet history belongs to the session and has bounded cursor input',async(
  const e=event();e.players[0].steamid=users[0].steamid;e.players[1].steamid=users[1].steamid;
  const body=JSON.stringify(e);expect((await request.post('/api/ingest.php',{data:body,headers:signed(body)})).status()).toBe(200);
  const histories=[];
- for(const user of users){
+ // Only the two participants in this round receive ledger entries.
+ for(const user of users.slice(0,2)){
   const headers={cookie:`wp_session=${user.id}`};
   const response=await request.get(`/api/cloudhub.php?action=history&steamid=${users[0].steamid}`,{headers});
   expect(response.status()).toBe(200);const page=await response.json();expect(page.transactions.length).toBeGreaterThan(0);

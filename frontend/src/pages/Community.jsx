@@ -1,22 +1,17 @@
 import { useState } from 'react'
 import { ArrowUpRight } from 'lucide-react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { SocialSettings, ProfileSocial, FriendsPage, NotificationsPage, ModerationPanel } from '../components/Social'
+import Badges from '../components/Badges'
 import Brand from '../components/Brand'
 import SiteFooter from '../components/SiteFooter'
 import CommunityNav from '../components/CommunityNav'
-import { communityRequest, useCommunityResource } from '../lib/community'
+import { communityRequest, useCommunityResource, useSocialCapabilities } from '../lib/community'
 import { apiUrl } from '../lib/api'
 import '../styles/Community.css'
 
 const number = value => value == null ? '—' : new Intl.NumberFormat('pl-PL').format(BigInt(value))
 const date = value => value ? new Date(value.replace(' ', 'T') + 'Z').toLocaleString('pl-PL') : 'Ukryta'
-function Badges({ stats }) {
-  if (!stats) return null
-  return <div className="ch-badges">{stats.roles?.map(role => <span className={`ch-badge ch-badge--${role.toLowerCase()}`} key={role}>{role === 'OWNER' ? '👑 OWNER' : role}</span>)}
-    {stats.rank && <span className={`ch-badge ch-rank--${stats.rank.rank_key}`}>{stats.rank.rank_key === 'diamond' ? '💎 ' : '◆ '}{stats.rank.name}</span>}
-    {stats.position && <span className="ch-badge ch-badge--top">🏆 TOP {number(stats.position)}</span>}
-  </div>
-}
 function State({ resource, children }) {
   if (resource.loading) return <p className="ch-community-state" role="status">Wczytywanie danych…</p>
   if (resource.error) return <div className="ch-community-state" role="alert"><h2>{resource.error.status === 404 ? 'Dane niedostępne' : 'Nie udało się wczytać danych'}</h2><p>{resource.error.status === 404 ? 'Profil jest prywatny, nie istnieje lub CloudHub Core nie został jeszcze włączony.' : resource.error.message}</p><button onClick={() => window.location.reload()}>Spróbuj ponownie</button></div>
@@ -68,12 +63,16 @@ function Profile({ user }) {
   const { steamid } = useParams(), [revision,setRevision] = useState(0)
   const resource = useCommunityResource('community.php?action=profile&steamid='+encodeURIComponent(steamid),revision)
   const p=resource.data?.profile, s=p?.stats
-  return <State resource={resource}>{p && <><div className="ch-profile-hero ch-community-card"><img src={p.avatar_url || '/images/cloudhub/avatar.svg'} alt=""/><div><p className="ch-eyebrow">PROFIL GRACZA</p><h1>{p.nickname}</h1><code>{p.steamid}</code><Badges stats={s}/><a href={`https://steamcommunity.com/profiles/${p.steamid}`} target="_blank" rel="noreferrer">Profil Steam <ArrowUpRight size={14} aria-hidden="true"/></a></div></div>
+  // The profile projection reports whether the social module (flag and migration) is active.
+  const socialEnabled=!!p?.social_enabled
+  return <State resource={resource}>{p && <><div className={`ch-profile-hero ch-community-card ch-theme-${p.theme} ch-banner-${p.banner}`}><img src={p.avatar_url || '/images/cloudhub/avatar.svg'} alt=""/><div><p className="ch-eyebrow">PROFIL GRACZA</p><h1>{p.nickname}</h1><code>{p.steamid}</code><Badges stats={s}/><a href={`https://steamcommunity.com/profiles/${p.steamid}`} target="_blank" rel="noreferrer">Profil Steam <ArrowUpRight size={14} aria-hidden="true"/></a></div></div>
     {revision>0 && <p role="status">Profil zapisany.</p>}
     <div className="ch-community-card"><h2>O graczu</h2><p className="ch-profile-bio">{p.bio || 'Gracz nie udostępnił opisu.'}</p><p>Ostatnia aktywność konta: {date(p.last_seen_at)}</p></div>
     {s && <div className="ch-stat-grid">{[['RP',number(s.rp)],['Zabójstwa',number(s.kills)],['Zgony',number(s.deaths)],['Asysty',number(s.assists)],['Headshoty',number(s.headshots)],['K/D',s.kd],['Wygrane rundy',number(s.rounds_won)],['Win rate rund',s.win_rate == null ? '—' : s.win_rate+'%'],['Aktywny czas gry',`${number(String(BigInt(s.play_seconds)/60n))} min`]].map(([label,value])=><article className="ch-community-card" key={label}><span>{label}</span><strong>{value}</strong></article>)}</div>}
     <section className="ch-community-card"><h2>Historia sezonów</h2>{p.seasons.length ? p.seasons.map(season=><div className="ch-season-entry" key={season.season_id}><strong>{season.name}</strong><span>{number(season.rp)} RP</span><span>{season.final_position ? `Miejsce końcowe: #${number(season.final_position)}`:'Miejsce końcowe nie zostało zapisane'}</span><Badges stats={season}/></div>):<p>Brak zapisanych sezonów.</p>}</section>
-    {p.editable && user && <ProfileEditor key={p.steamid+':'+revision} profile={p} onSaved={()=>setRevision(v=>v+1)}/>}
+    {socialEnabled && <ProfileSocial target={p.steamid} user={user}/>}
+    {p.editable && user && socialEnabled && <SocialSettings key={p.steamid+':social:'+revision} onSaved={()=>setRevision(v=>v+1)}/>}
+    {p.editable && user && !socialEnabled && <ProfileEditor key={p.steamid+':'+revision} profile={p} onSaved={()=>setRevision(v=>v+1)}/>}
   </>}</State>
 }
 function Wallet() {
@@ -117,15 +116,16 @@ function Admin({ user }) {
   }
   const [search,setSearch]=useState(''),[query,setQuery]=useState(''),[page,setPage]=useState(1),[revision,setRevision]=useState(0),[selected,setSelected]=useState(pending ? {steamid:pending.steamid,nickname:pending.steamid} : null),[before,setBefore]=useState(null)
   const players=useCommunityResource('admin.php?action=players&'+new URLSearchParams({search:query,page}),revision), config=useCommunityResource('admin.php?action=config'), audit=useCommunityResource('admin.php?action=audit'+(before?'&before='+before:''),revision)
+  const social=useSocialCapabilities(user)
   return <><div className="ch-community-heading"><p className="ch-eyebrow">CLOUDHUB / OWNER</p><h1>Administracja<span>.</span></h1><p>Gracze, Cloud Coins i dziennik operacji.</p></div><State resource={players}>{players.data && <><form className="ch-community-search" onSubmit={e=>{e.preventDefault();setQuery(search);setPage(1)}}><label htmlFor="admin-search">Znajdź gracza</label><input id="admin-search" value={search} onChange={e=>setSearch(e.target.value)} maxLength={128}/><button>Szukaj</button></form>{players.data.players.length?<PlayerTable rows={players.data.players} user={user} onSelect={setSelected} selectionLocked={!!pending}/>:<Empty/>}<Pager {...players.data} onChange={setPage}/></>}</State>
     {selected&&<Adjustment key={selected.steamid} player={selected} pending={pending} updatePending={updatePending} enabled={config.data?.adjustments_enabled} onSaved={()=>setRevision(v=>v+1)}/>}
-    <section className="ch-community-card"><h2>Dziennik administracyjny</h2><State resource={audit}>{audit.data && <>{audit.data.entries.length?audit.data.entries.map(e=><article className="ch-audit-entry" key={e.id}><strong>#{e.id} · {e.action}</strong><p>{e.reason}</p><small>{date(e.created_at)} · Administrator: {e.actor_steamid||'CLI'} · Gracz: {e.target_steamid||'—'}</small><pre>{e.metadata_json}</pre></article>):<p>Brak operacji.</p>}<div className="ch-community-pager"><button disabled={!before} onClick={()=>setBefore(null)}>Najnowsze</button><button disabled={!audit.data.next_before} onClick={()=>setBefore(audit.data.next_before)}>Starsze</button></div></>}</State></section>
+    {social?.moderate&&<ModerationPanel/>}<section className="ch-community-card"><h2>Dziennik administracyjny</h2><State resource={audit}>{audit.data && <>{audit.data.entries.length?audit.data.entries.map(e=><article className="ch-audit-entry" key={e.id}><strong>#{e.id} · {e.action}</strong><p>{e.reason}</p><small>{date(e.created_at)} · Administrator: {e.actor_steamid||'CLI'} · Gracz: {e.target_steamid||'—'}</small><pre>{e.metadata_json}</pre></article>):<p>Brak operacji.</p>}<div className="ch-community-pager"><button disabled={!before} onClick={()=>setBefore(null)}>Najnowsze</button><button disabled={!audit.data.next_before} onClick={()=>setBefore(audit.data.next_before)}>Starsze</button></div></>}</State></section>
     <section className="ch-community-card"><h2>Rangi i punktacja</h2><p>Edycja WWW jest wyłączona. Zmiany zasad wymagają wersjonowania konfiguracji i sprawdzenia wpływu na oczekujące zdarzenia Core.</p><State resource={config}>{config.data && <><div className="ch-config-grid">{config.data.ranks.map(r=><p key={r.rank_key}><strong>{r.name}</strong> od {number(r.min_rp)} RP</p>)}</div><details><summary>Reguły punktacji i antyfarm</summary><dl className="ch-config-grid">{config.data.rewards.map(r=><div key={r.rule_key}><dt>{r.rule_key}</dt><dd>{r.value}</dd></div>)}</dl></details></>}</State></section>
   </>
 }
 export default function Community({ user, mode }) {
-  const needsLogin=['wallet','admin'].includes(mode)
+  const needsLogin=['wallet','admin','friends','notifications','moderation'].includes(mode)
   return <div className="ch-community-page"><header className="ch-community-header"><Link to="/" aria-label="CloudHub CS2"><Brand/></Link><Link to="/team">Konfigurator skinów</Link><Link to="/download">Pobierz CloudHub</Link>{!user&&<a href={apiUrl('login-steam.php')}>Zaloguj przez Steam <ArrowUpRight size={14} aria-hidden="true"/></a>}</header><CommunityNav user={user}/><main className="ch-community-main">
-    {needsLogin&&!user?<div className="ch-community-state"><h1>Zaloguj się przez Steam</h1><p>Ta część CloudHub jest dostępna po zalogowaniu.</p><a className="ch-primary" href={apiUrl('login-steam.php')}>Zaloguj przez Steam</a></div>:mode==='profile'?<Profile user={user}/>:mode==='wallet'?<Wallet/>:mode==='admin'?<Admin user={user}/>:<Leaderboard user={user} directory={mode==='players'}/>}
+    {needsLogin&&!user?<div className="ch-community-state"><h1>Zaloguj się przez Steam</h1><p>Ta część CloudHub jest dostępna po zalogowaniu.</p><a className="ch-primary" href={apiUrl('login-steam.php')}>Zaloguj przez Steam</a></div>:mode==='friends'?<FriendsPage user={user}/>:mode==='notifications'?<NotificationsPage/>:mode==='moderation'?<ModerationPanel/>:mode==='profile'?<Profile user={user}/>:mode==='wallet'?<Wallet/>:mode==='admin'?<Admin user={user}/>:<Leaderboard user={user} directory={mode==='players'}/>}
   </main><SiteFooter/></div>
 }
