@@ -5,6 +5,9 @@ using System.Text.Json;
 using System.Threading.Channels;
 namespace CloudHub.Core;
 public static class EventSigner {
+    /// <summary>Backend replies use the "r1" prefix, so a reply can never pass as a request.</summary>
+    public static string SignResponse(string key,string server,string timestamp,string body) =>
+        Convert.ToHexStringLower(HMACSHA256.HashData(Encoding.UTF8.GetBytes(key),Encoding.UTF8.GetBytes($"r1\n{server}\n{timestamp}\n{Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(body)))}")));
     public static string Sign(string key,string server,string timestamp,string body) =>
         Convert.ToHexStringLower(HMACSHA256.HashData(Encoding.UTF8.GetBytes(key),Encoding.UTF8.GetBytes($"v1\n{server}\n{timestamp}\n{Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(body)))}")));
 }
