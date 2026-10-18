@@ -175,6 +175,8 @@ function SessionApp() {
           <Route path="/notifications" element={<Community user={user} mode="notifications" />} />
           <Route path="/moderation" element={<Community user={user} mode="moderation" />} />
           <Route path="/wallet" element={<Community user={user} mode="wallet" />} />
+          <Route path="/shop" element={<Community user={user} mode="shop" />} />
+          <Route path="/inventory" element={<Community user={user} mode="inventory" />} />
           <Route path="/admin" element={<Community user={user} mode="admin" />} />
           <Route path="*" element={user ? <LoggedInRoutes user={user} /> : <Login />} />
         </Routes>
