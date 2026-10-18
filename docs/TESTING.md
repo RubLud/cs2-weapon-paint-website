@@ -71,3 +71,7 @@ Na Windows bez WSL/Dockera harness nie działa, bo wymaga MariaDB przez unix soc
 ## Stage 5: Cloud Coins shop
 
 `pnpm test` now also runs `tests/shop-pricing.php` (catalog/price proposal and earning simulation, no database) and `tests/shop.php` (purchases on the disposable database), followed by `tests/shop.spec.js` (API and browser). The harness enables `CLOUDHUB_SHOP_ENABLED` and `CLOUDHUB_SHOP_PURCHASES_ENABLED` only in its generated configuration. `tests/shop-worker.php` uses independent connections for concurrent purchases and replays; an injected inventory trigger failure verifies full rollback of wallet, ledger and purchase. The CI `static` job runs `php tests/shop-pricing.php` and `php bin/cloudhub-shop-catalog.php --simulate`, both safe without a database. See [SHOP_STAGE5.pl.md](SHOP_STAGE5.pl.md).
+
+## Stage 6: WeaponPaints ownership
+
+`pnpm test` also runs `tests/ownership.php` after the shop tests, on the same disposable database. It covers activation conditions, the OWNER snapshot, legacy and purchased ownership rules and the read-only audit. The harness starts a third PHP backend on port 8084 with `CLOUDHUB_OWNERSHIP_ENFORCED` on, sharing the database and sessions. `tests/ownership.spec.js` calls it directly, and routes the browser's `/api` calls to it for the configurator test. The main backend (8082) keeps enforcement off, so the other suites run unchanged. See [OWNERSHIP_STAGE6.pl.md](OWNERSHIP_STAGE6.pl.md).

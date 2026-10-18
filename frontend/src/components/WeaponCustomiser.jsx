@@ -31,8 +31,14 @@ import { askConfirm } from "../lib/dialogs";
 import { useShopPrices } from "../lib/shopPrices";
 import "../styles/Weapon3DPreview.css";
 
-function ShopBadge({ entry, copy, locale }) {
-  if (!entry) return null;
+function ShopBadge({ entry, enforced, paint, copy, locale }) {
+  // With enforcement on, an unowned finish cannot be saved; the backend refuses it either way.
+  if (!entry)
+    return enforced && paint > 0 ? (
+      <span className="skin-shop-badge skin-shop-badge--locked" title={copy.shopUnavailableTitle}>
+        {copy.shopUnavailable}
+      </span>
+    ) : null;
   if (entry.owned)
     return (
       <span className="skin-shop-badge skin-shop-badge--owned" title={copy.shopOwnedTitle}>
@@ -41,7 +47,11 @@ function ShopBadge({ entry, copy, locale }) {
     );
   if (entry.price == null) return null;
   return (
-    <span className="skin-shop-badge" title={copy.shopPriceTitle}>
+    <span
+      className={"skin-shop-badge" + (enforced ? " skin-shop-badge--locked" : "")}
+      title={enforced ? copy.shopLockedTitle : copy.shopPriceTitle}
+    >
+      {enforced ? copy.shopLocked + " " : ""}
       {new Intl.NumberFormat(locale === "pl" ? "pl-PL" : "en-US").format(entry.price)} CC
     </span>
   );
@@ -50,7 +60,7 @@ function ShopBadge({ entry, copy, locale }) {
 export default function WeaponCustomizer({ weapon, onClose, onSave, onReset }) {
   const { t, locale } = useI18n();
   const c = cloudhubCopy(locale);
-  // Informational only: ownership is not enforced; selecting and saving work exactly as before.
+  // Preview always works. Saving an unowned item is refused by the backend only when enforcement is on.
   const shopPrices = useShopPrices();
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
@@ -994,6 +1004,8 @@ export default function WeaponCustomizer({ weapon, onClose, onSave, onReset }) {
                         entry={shopPrices?.get(
                           `${skin.weapon_defindex ?? weapon.cs2_id ?? weapon.defindex}:${Number(skin.paint)}`,
                         )}
+                        enforced={shopPrices?.enforced === true}
+                        paint={Number(skin.paint)}
                         copy={c}
                         locale={locale}
                       />

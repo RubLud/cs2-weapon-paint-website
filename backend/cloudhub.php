@@ -2,7 +2,7 @@
 require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/class/SessionBootstrap.php';
 require_once __DIR__ . '/class/ApiProtect.php';
-require_once __DIR__ . '/class/CloudHubShop.php';
+require_once __DIR__ . '/class/CloudHubOwnership.php';
 wp_send_cors_headers();
 wp_boot_session();
 header('Content-Type: application/json; charset=utf-8');
@@ -27,6 +27,6 @@ if (($_GET['action'] ?? '') === 'history') {
     echo json_encode(['transactions'=>$history,'next_before'=>count($history)===50?end($history)['id']:null],JSON_THROW_ON_ERROR);
     exit;
 }
-// Ownership enforcement belongs to Stage 6 and stays off until the OWNER approves the migration.
+// Ownership enforcement needs its flag, migration 005 and an OWNER snapshot of existing WeaponPaints data.
 $shop = CloudHubShop::active($db);
-echo json_encode(['account'=>$account,'features'=>['shop'=>$shop,'shop_purchases'=>$shop && CloudHubShop::purchasesEnabled(),'ownership_enforcement'=>false]], JSON_THROW_ON_ERROR);
+echo json_encode(['account'=>$account,'features'=>['shop'=>$shop,'shop_purchases'=>$shop && CloudHubShop::purchasesEnabled(),'ownership_enforcement'=>$shop && CloudHubOwnership::active($db)]], JSON_THROW_ON_ERROR);

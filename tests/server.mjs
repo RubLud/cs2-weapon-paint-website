@@ -40,6 +40,9 @@ fs.writeFileSync(
 );
 const disabledConfig=path.join(runtime,"disabled.php");
 fs.writeFileSync(disabledConfig, "<?php define('CLOUDHUB_CORE_ENABLED',true); define('CLOUDHUB_INGEST_ENABLED',false);");
+// Same database and sessions with Stage 6 ownership enforcement on; the main backend keeps it off.
+const enforcedConfig=path.join(runtime,"enforced.php");
+fs.writeFileSync(enforcedConfig, `<?php define('CLOUDHUB_OWNERSHIP_ENFORCED',true); require ${php(config)};`);
 const env = {
   ...process.env,
   CLOUDHUB_CONFIG: config,
@@ -55,6 +58,7 @@ const sessions = JSON.parse(
 execFileSync("php", ["tests/social.php"], { env, stdio: "inherit" });
 execFileSync("php", ["tests/shop-pricing.php"], { env, stdio: "inherit" });
 execFileSync("php", ["tests/shop.php"], { env, stdio: "inherit" });
+execFileSync("php", ["tests/ownership.php"], { env, stdio: "inherit" });
 // Exercise the public CLI entry point too; it must leave WeaponPaints intact.
 execFileSync("php", ["bin/cloudhub-migrate.php", "--apply"], { env, stdio: "inherit" });
 fs.mkdirSync(path.join(root, "test-results"), { recursive: true });
@@ -81,6 +85,7 @@ process.on("SIGINT", () => stop());
 for (const [cmd, args] of [
   ["php", ["-S", "127.0.0.1:8082", "-t", "backend"]],
   ["php", ["-S", "127.0.0.1:8083", "-t", "backend"]],
+  ["php", ["-S", "127.0.0.1:8084", "-t", "backend"]],
   [
     "node",
     [
@@ -94,7 +99,7 @@ for (const [cmd, args] of [
     ],
   ],
 ]) {
-  const child = spawn(cmd, args, { cwd: root, env: args.includes("127.0.0.1:8083") ? {...env,CLOUDHUB_CONFIG:disabledConfig} : env, stdio: "inherit" });
+  const child = spawn(cmd, args, { cwd: root, env: args.includes("127.0.0.1:8083") ? {...env,CLOUDHUB_CONFIG:disabledConfig} : args.includes("127.0.0.1:8084") ? {...env,CLOUDHUB_CONFIG:enforcedConfig} : env, stdio: "inherit" });
   children.push(child);
   child.on("exit", (code) => {
     if (!stopping) stop(code || 1);

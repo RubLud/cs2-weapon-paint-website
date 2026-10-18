@@ -42,3 +42,5 @@ if (!defined('CLOUDHUB_SOCIAL_ENABLED')) define('CLOUDHUB_SOCIAL_ENABLED', false
 // SHOP_ENABLED shows the catalog, inventory and history; purchases need the second flag and OWNER-approved prices.
 if (!defined('CLOUDHUB_SHOP_ENABLED')) define('CLOUDHUB_SHOP_ENABLED', false);
 if (!defined('CLOUDHUB_SHOP_PURCHASES_ENABLED')) define('CLOUDHUB_SHOP_PURCHASES_ENABLED', false);
+// Stage 6: WeaponPaints saves need ownership. Stays off until migration 005 and an OWNER snapshot exist.
+if (!defined('CLOUDHUB_OWNERSHIP_ENFORCED')) define('CLOUDHUB_OWNERSHIP_ENFORCED', false);

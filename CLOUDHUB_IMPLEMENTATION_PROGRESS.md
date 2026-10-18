@@ -10,8 +10,8 @@ Nowa specyfikacja: [docs/CLOUDHUB_NOWA_PELNA_SPECYFIKACJA.md](docs/CLOUDHUB_NOWA
 | Core: RP, CC, rangi, antyfarm, HMAC, outbox C# | CZĘŚCIOWO GOTOWE | Brakuje MVP i przegranej rundy, komend w grze, CI dla `dotnet test`. Nagrody do ponownego balansu (§13.1). |
 | Profile, ranking, OWNER CC | GOTOWE | PR #5. Profil wymaga MVP, postępu rangi i osiągnięć (§6). |
 | Społeczność | GOTOWE, WYMAGA TESTÓW na stagingu | PR #6 + #7, CI zielone, czeka na zgodę na merge do master |
-| Sklep CC i ekwipunek (Etap 5) | CZĘŚCIOWO GOTOWE, WYMAGA TESTÓW | Kod, migracja 004 i testy na gałęzi `cloudhub-stage5-shop` (lokalnie). Testy na bazie i UI czekają na CI. Cennik wymaga zatwierdzenia. |
-| Własność w WeaponPaints (Etap 6) | NIEZROBIONE | flaga `ownership_enforcement`, migracja posiadanych skinów, zgoda OWNER |
+| Sklep CC i ekwipunek (Etap 5) | GOTOWE, WYMAGA TESTÓW na stagingu | PR #8 (RubLud) do `cloudhub-stage4-social`, CI zielone (81 asercji sklepu, 49 cennika, 24/24 Playwright). Cennik testowy, sprzedaż niezatwierdzona. |
+| Własność w WeaponPaints (Etap 6) | CZĘŚCIOWO GOTOWE, WYMAGA TESTÓW | Gałąź `cloudhub-stage6-ownership` (lokalnie): migracja 005, kontrola zapisów WWW, snapshot stanu, audyt. Menu w grze wymagają zatwierdzonej zmiany konfiguracji pluginu. Szczegóły: [docs/OWNERSHIP_STAGE6.pl.md](docs/OWNERSHIP_STAGE6.pl.md). |
 | Redesign | NIEZROBIONE | po sklepie i ekwipunku |
 | Logo | NIEZROBIONE | wymaga zatwierdzenia propozycji |
 | Stopka „Designed by RUB LUD” | NIEZROBIONE | licencja MIT sprawdzona: `LICENSE` zostaje, link wizualny może zniknąć |
@@ -20,6 +20,19 @@ Nowa specyfikacja: [docs/CLOUDHUB_NOWA_PELNA_SPECYFIKACJA.md](docs/CLOUDHUB_NOWA
 | Balans i symulacje RP/CC | NIEZROBIONE | wartości startowe z §13.1 do symulacji |
 | CS2UIKit | NIEZROBIONE | wymaga weryfikacji API |
 | CloudHub Desktop | NIEZROBIONE | zrobiona tylko podstrona `/download`; wymagana analiza Tauri/Electron/.NET |
+
+## Etap 6 — własność w WeaponPaints (18 października 2026)
+
+Lokalna gałąź `cloudhub-stage6-ownership` z `cloudhub-stage5-shop` (`5258473`). Bez push, merge, wdrożenia, migracji produkcyjnej i zmian na serwerze gry. Szczegóły: [docs/OWNERSHIP_STAGE6.pl.md](docs/OWNERSHIP_STAGE6.pl.md).
+
+- Migracja addytywna `005_cloudhub_ownership.sql`: snapshoty OWNER i własność sprzed egzekwowania. `wp_*` bez zmian.
+- `CloudHubOwnership`: posiadanie z zakupu lub snapshotu. Darmowe są personalizacja, domyślne wykończenia, domyślny nóż i domyślne rękawice. Model noża lub rękawic odblokowuje posiadanie dowolnego ich wykończenia. Nieznane połączenia są odrzucane.
+- Kontrola w `skins.php` (`save`, `gloves_save`), `knife.php` (`set`), `loadouts.php` (`apply`). Odmowa `403 not_owned` bez zapisu.
+- Flaga `CLOUDHUB_OWNERSHIP_ENFORCED` (domyślnie `false`). Działa tylko z aktywnym sklepem, migracją 005 i snapshotem OWNER.
+- CLI `bin/cloudhub-ownership.php`: `--dry-run`, `--apply --reason`, `--audit` (tylko odczyt).
+- Sklep: przedmioty ze snapshotu jako „Posiadasz”, w ekwipunku, bez podwójnego zakupu. Konfigurator przy egzekwowaniu: „Kup: N CC” lub „Niedostępny”, podgląd bez zmian.
+- Plugin WeaponPaints (kod sprawdzony do odczytu): `!skins`, `!knife`, `!gloves` zapisują do bazy z pominięciem WWW. Rekomendacja: puste `CommandSkinSelection`, `CommandKnife`, `CommandGlove`. Wymaga zgody i weryfikacji wdrożonej wersji.
+- Weryfikacja lokalna PASS: lint, build, `php -l`, 49 asercji pricing, `git diff --check`. Niezweryfikowane lokalnie: `tests/ownership.php`, `tests/ownership.spec.js` i pełna regresja; wymagają CI.
 
 ## Etap 5 — sklep Cloud Coins i ekwipunek (18 października 2026)
 
@@ -31,7 +44,7 @@ Lokalna gałąź `cloudhub-stage5-shop` z `cloudhub-stage4-social` (`f22094b`). 
 - UI: `/shop`, `/inventory`, sekcja „Sklep i ekonomia” w `/admin`, etykieta zakupu w portfelu, cena CC i „Posiadasz” w konfiguratorze (informacyjnie, bez blokady).
 - Decyzje OWNER (18.10.2026): cennik testowy zaakceptowany, sprzedaż niezatwierdzona; M4A4 | Howl poza sprzedażą bez ceny; limit 100 CC/h bez zmian (konfigurowalny w `cloudhub_reward_rules`).
 - Flagi `CLOUDHUB_SHOP_ENABLED` (podgląd) i `CLOUDHUB_SHOP_PURCHASES_ENABLED` (zakupy), obie domyślnie `false`. Personalizacja nadal 0 CC.
-- Egzekwowanie własności: NIEZROBIONE, Etap 6.
+- Egzekwowanie własności: Etap 6 (powyżej).
 - CLI `bin/cloudhub-shop-catalog.php`: propozycja 2126 produktów według oficjalnej rzadkości i faz Doppler (snapshot ByMykel/CSGO-API, MIT). Produkty bez wiarygodnych danych trafiają do weryfikacji bez ceny. Wszystko nieaktywne do zatwierdzenia. Do tego symulacja zarobków. Wniosek: `hourly_cc_cap=100` wyrównuje CC wszystkich profili do ~66 na mecz. Decyzja o balansie należy do właściciela; wartości nie zostały zmienione.
 - Weryfikacja lokalna PASS: lint, build, `php -l` (52 pliki), 49 asercji pricing, `--simulate`, `git diff --check`.
 - Niezweryfikowane lokalnie: `tests/shop.php` (baza), `tests/shop.spec.js` (API/UI) oraz regresja całego `pnpm test`. Wymagają CI na Linuksie, czyli push za zgodą.

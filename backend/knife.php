@@ -3,6 +3,7 @@ require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/class/SessionBootstrap.php';
 require_once __DIR__ . '/class/ApiProtect.php';
 require_once __DIR__ . '/class/Database.php';
+require_once __DIR__ . '/class/CloudHubOwnership.php';
 
 wp_send_cors_headers();
 wp_boot_session();
@@ -108,6 +109,8 @@ switch ($action) {
         $allowed = array_map(fn($w) => 'weapon_' . $w['name'], array_filter(wp_catalog('weapons.json'), fn($w) => $w['category'] === 'Knife'));
         $allowed[] = 'weapon_knife';
         if (!in_array($knife, $allowed, true)) { wp_json_error(422, 'Unknown knife'); }
+        $knifeDef = CloudHubOwnership::knifeDefindex($knife);
+        wp_require_owned($db, $steamid, $knifeDef === null ? [] : [[$knifeDef, 0]]);
 
         // Czy rekord istnieje?
         $stmt = $db->prepare('SELECT COUNT(*) FROM wp_player_knife WHERE steamid = ? AND weapon_team = ?');

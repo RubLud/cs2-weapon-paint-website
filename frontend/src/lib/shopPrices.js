@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react'
 import { communityRequest } from './community'
 
 let pending = null
-/** One price/ownership index per page load; a disabled shop (404) or any error resolves to null. */
+/** One price/ownership index per page load; a disabled shop (404) or any error resolves to null. `enforced`: saving needs ownership (Stage 6). */
 function loadShopPrices() {
   pending ||= communityRequest('shop.php?action=prices')
-    .then(data => new Map(data.items.map(([defindex, paint, price, owned]) => [`${defindex}:${paint}`, { price, owned }])))
+    .then(data => Object.assign(new Map(data.items.map(([defindex, paint, price, owned]) => [`${defindex}:${paint}`, { price, owned }])), { enforced: data.enforced === true }))
     .catch(() => null)
   return pending
 }

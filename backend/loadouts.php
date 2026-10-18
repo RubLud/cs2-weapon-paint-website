@@ -3,6 +3,7 @@ require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/class/SessionBootstrap.php';
 require_once __DIR__ . '/class/ApiProtect.php';
 require_once __DIR__ . '/class/Database.php';
+require_once __DIR__ . '/class/CloudHubOwnership.php';
 
 wp_send_cors_headers();
 wp_boot_session();
@@ -667,6 +668,14 @@ switch ($action) {
             echo json_encode(['error' => 'Corrupt payload']);
             exit;
         }
+
+        // Presets may hold items picked before enforcement or copied from another player; all must be owned.
+        $both = ($row['scope'] ?? '') === 'both' || ($payload['scope'] ?? '') === 'both';
+        $teams = $both ? [$payload['t'] ?? [], $payload['ct'] ?? []] : [$payload['team'] ?? $payload];
+        wp_require_owned($db, $steamid, array_merge(...array_map(
+            fn($t) => is_array($t) ? CloudHubOwnership::teamItems($t) : [],
+            $teams
+        )));
 
         try {
             $db->beginTransaction();

@@ -11,7 +11,7 @@ Gałąź `cloudhub-stage5-shop`, utworzona z `cloudhub-stage4-social` (`f22094b`
   - `cloudhub_player_inventory`: trwała własność (`purchase`, przygotowane `grant`/`migration`).
 - Tabele `wp_*` WeaponPaints i zapisane skiny graczy są nietknięte. Test porównuje `wp_player_skins` przed zakupami i po nich.
 - Zakup kosztuje wyłącznie bazowy przedmiot. Float, wear, pattern, naklejki, zawieszki, StatTrak, nametag i presety pozostają w istniejącym konfiguratorze i kosztują 0 CC. Test API zapisuje pełną personalizację kupionego skina i sprawdza, że saldo się nie zmienia.
-- **Egzekwowanie własności nie jest częścią tego etapu.** Konfigurator i plugin nadal działają jak dotąd (`ownership_enforcement:false`). Etap 6 wymaga osobnej flagi, migracji posiadanych skinów i zgody OWNER (§12 starego dokumentu).
+- **Egzekwowanie własności nie jest częścią tego etapu.** Konfigurator i plugin nadal działają jak dotąd (`ownership_enforcement:false`). Etap 6: [OWNERSHIP_STAGE6.pl.md](OWNERSHIP_STAGE6.pl.md).
 
 ## API
 

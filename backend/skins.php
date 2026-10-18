@@ -3,6 +3,7 @@ require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/class/SessionBootstrap.php';
 require_once __DIR__ . '/class/ApiProtect.php';
 require_once __DIR__ . '/class/Database.php';
+require_once __DIR__ . '/class/CloudHubOwnership.php';
 
 wp_send_cors_headers();
 wp_boot_session();
@@ -286,6 +287,7 @@ switch ($action) {
             $offsetY = $_POST['offsetY'] ?? 0;
             $offsetZ = $_POST['offsetZ'] ?? 0;
             $keychainSeed = $_POST['keychainSeed'] ?? 0;
+            wp_require_owned($db, (string) $steamid, [[(int) $weapon_defindex, (int) $paint]]);
 
             // STICKER FORMAT: id;schema;x;y;wear;scale;rotation (5 slots)
             // Accept full string or bare id (legacy clients).
@@ -445,6 +447,7 @@ switch ($action) {
         $paint = $_POST['paint'] ?? 0;
         $wear = $_POST['wear'] ?? 0;
         $seed = $_POST['seed'] ?? 0;
+        wp_require_owned($db, (string) $steamid, [[(int) $weapon_defindex, (int) $paint]]);
         //check if gloves already exist for this steamid and team in wp_player_gloves
         $stmt = $db->prepare("SELECT COUNT(*) FROM wp_player_gloves WHERE steamid = ? AND weapon_team = ?");
         $stmt->execute([$steamid, $team]);
