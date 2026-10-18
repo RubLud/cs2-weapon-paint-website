@@ -3,6 +3,10 @@ final class CloudHubIngestAuth {
     public static function signature(string $key, string $server, string $timestamp, string $body): string {
         return hash_hmac('sha256', "v1\n$server\n$timestamp\n" . hash('sha256', $body), $key);
     }
+    /** Signed replies to the CS2 server; the "r1" prefix keeps a reply from ever verifying as a request. */
+    public static function responseSignature(string $key, string $server, string $timestamp, string $body): string {
+        return hash_hmac('sha256', "r1\n$server\n$timestamp\n" . hash('sha256', $body), $key);
+    }
     public static function verify(array $headers, string $body, array $keys, int $now): string {
         $server = $headers['server'] ?? ''; $stamp = $headers['timestamp'] ?? ''; $mac = $headers['signature'] ?? '';
         if (!is_string($server) || !preg_match('/^[a-zA-Z0-9_-]{1,64}$/D',$server) ||

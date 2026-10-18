@@ -3,5 +3,6 @@
   "server": "test",
   "timestamp": "1700000000",
   "body": "{\"message\":\"Zażółć gęślą jaźń\"}",
-  "signature": "791dc64187c97085b39ad8e5dad53b984c23de25f572883fc8d19b3d5eedd15f"
+  "signature": "791dc64187c97085b39ad8e5dad53b984c23de25f572883fc8d19b3d5eedd15f",
+  "response_signature": "b13e8ea4088c999175c6bd00aabaa6f8cf2199d13965af6d7d4b3fcc41e875a6"
 }

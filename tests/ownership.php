@@ -64,6 +64,16 @@ foreach([$ak,$knife,$glove] as $i=>$p) $check($shop->buy($e,['product_id'=>(stri
 $check($own->missing($e,[$item($ak),$item($knife),[(int)$knife['weapon_defindex'],0],$item($glove),[(int)$glove['weapon_defindex'],0]])===[],'Bought items and their models are allowed');
 $check(count($own->missing($e,[[(int)$knife['weapon_defindex'],(int)$knife['paint_id']+100000]]))===1,'Owning one knife finish does not unlock others');
 
+// Server view for the in-game menus: same sources as the guard, every requested player answered.
+$view=$own->serverView([$c,$e,'76561198000000899'],true); $players=(array)$view['players'];
+$check($view['enforced']===true && array_keys($players)===[$c,$e,'76561198000000899'] && $players['76561198000000899']===[],'Server view answers every requested player, also those owning nothing');
+$check(in_array($item($ak),$players[$c],true) && in_array([7,99999],$players[$c],true),'Server view includes legacy items');
+$check(in_array($item($knife),$players[$e],true) && in_array($item($glove),$players[$e],true),'Server view includes purchases');
+$check(in_array((int)$knife['weapon_defindex'],$view['models'],true) && in_array((int)$glove['weapon_defindex'],$view['models'],true) && !in_array(7,$view['models'],true),'Server view lists knife and glove models only');
+$price=(int)$db->query("SELECT price_cc FROM cloudhub_shop_products WHERE id=".(int)$ak['id'])->fetchColumn();
+$check(in_array([7,(int)$ak['paint_id'],$price],$view['prices'],true) && $view['purchases_enabled']===true,'Server view carries database prices');
+$check(!isset($own->serverView([$e],false)['prices']) && $own->serverView([],false)['players']==new stdClass(),'Catalog only on request; empty request is valid');
+
 // Shop sees legacy ownership: owned badge, inventory entry, no double purchase.
 $prices=$shop->prices($c)['items'];
 $check(in_array([7,(int)$ak['paint_id'],null,true],array_map(fn($r)=>[$r[0],$r[1],null,$r[3]],$prices),true) && $shop->prices($c)['enforced']===true,'Configurator index marks legacy items owned and reports enforcement');
@@ -146,6 +156,8 @@ $pluginSkin($f,2,7,(int)$ak['paint_id']); $check((int)$paintOf($f,2,7)===(int)$a
 $db->exec("UPDATE cloudhub_schema_migrations SET version='005_hidden_for_test' WHERE version='005_cloudhub_ownership.sql'");
 try {
     $check(!CloudHubOwnership::active($db),'Missing migration 005 disables enforcement');
+    $off=$own->serverView([$c],true);
+    $check($off['enforced']===false && (array)$off['players']===[] && !isset($off['prices']),'Inactive enforcement is an explicit reply without players');
     $check(!array_filter((new CloudHubShop($db))->prices($c)['items'],fn($r)=>$r[3]),'Shop ignores legacy rows without migration 005');
 } finally { $db->exec("UPDATE cloudhub_schema_migrations SET version='005_cloudhub_ownership.sql' WHERE version='005_hidden_for_test'"); }
 

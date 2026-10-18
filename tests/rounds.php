@@ -61,4 +61,5 @@ $reject(fn()=>$send($round()),'overlapping seasons reject');$db->exec("UPDATE cl
 foreach($ids as $id){$sum=(int)$db->query("SELECT COALESCE(SUM(amount),0) FROM cloudhub_wallet_transactions WHERE steamid='$id'")->fetchColumn();$check($sum===$wallet($id),'wallet reconciles with ledger');}
 $vector=json_decode(file_get_contents(__DIR__.'/protocol-vector.json'),true,512,JSON_THROW_ON_ERROR);
 $check(CloudHubIngestAuth::signature($vector['key'],$vector['server'],$vector['timestamp'],$vector['body'])===$vector['signature'],'shared UTF-8 HMAC vector');
+$check(CloudHubIngestAuth::responseSignature($vector['key'],$vector['server'],$vector['timestamp'],$vector['body'])===$vector['response_signature'] && $vector['response_signature']!==$vector['signature'],'shared reply HMAC vector, distinct from requests');
 fwrite(STDERR,"CloudHub rounds assertions passed: $n\n");

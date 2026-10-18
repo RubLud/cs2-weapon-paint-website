@@ -84,6 +84,30 @@ final class CloudHubOwnership {
         $missing=$this->missing($steamid,$items);
         if ($missing) throw new CloudHubOwnershipError($missing);
     }
+    /**
+     * Read-only view for the in-game menus of the CS2 server. Every requested player gets an entry, so the server
+     * can tell "owns nothing" from "not asked". "Not enforced" is only ever an explicit reply, never a default.
+     * @param list<string> $steamids canonical SteamID64 strings, at most 64
+     * @return array{enforced:bool,players:object,models?:list<int>,prices?:list<array{0:int,1:int,2:int}>,purchases_enabled?:bool}
+     */
+    public function serverView(array $steamids,bool $catalog): array {
+        if (!self::active($this->db)) return ['enforced'=>false,'players'=>new stdClass()];
+        $players=[];
+        foreach ($steamids as $id) $players[$id]=[];
+        if ($steamids) {
+            $in=implode(',',array_fill(0,count($steamids),'?'));
+            $s=$this->db->prepare("SELECT i.steamid,p.weapon_defindex,p.paint_id FROM cloudhub_player_inventory i JOIN cloudhub_shop_products p ON p.id=i.product_id WHERE i.steamid IN ($in) UNION SELECT steamid,weapon_defindex,paint_id FROM cloudhub_legacy_ownership WHERE steamid IN ($in)");
+            $s->execute([...$steamids,...$steamids]);
+            foreach ($s->fetchAll(PDO::FETCH_NUM) as [$id,$def,$paint]) $players[(string)$id][]=[(int)$def,(int)$paint];
+        }
+        $out=['enforced'=>true,'players'=>(object)$players];
+        if ($catalog) {
+            $out['models']=array_keys(self::models());
+            $out['prices']=array_map(fn($r)=>[(int)$r[0],(int)$r[1],(int)$r[2]],$this->db->query('SELECT weapon_defindex,paint_id,price_cc FROM cloudhub_shop_products WHERE is_active=1 AND price_cc IS NOT NULL')->fetchAll(PDO::FETCH_NUM));
+            $out['purchases_enabled']=CloudHubShop::purchasesEnabled();
+        }
+        return $out;
+    }
 
     /** Everything WeaponPaints currently stores per player: equipped rows, knife models, glove models and saved loadouts. */
     private function collect(): array {

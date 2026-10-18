@@ -44,3 +44,5 @@ if (!defined('CLOUDHUB_SHOP_ENABLED')) define('CLOUDHUB_SHOP_ENABLED', false);
 if (!defined('CLOUDHUB_SHOP_PURCHASES_ENABLED')) define('CLOUDHUB_SHOP_PURCHASES_ENABLED', false);
 // Stage 6: WeaponPaints saves need ownership. Stays off until migration 005 and an OWNER snapshot exist.
 if (!defined('CLOUDHUB_OWNERSHIP_ENFORCED')) define('CLOUDHUB_OWNERSHIP_ENFORCED', false);
+// In-game menu ownership view for the CS2 server (CloudHub fork of WeaponPaints). Needs the ingestion pool and keys.
+if (!defined('CLOUDHUB_OWNERSHIP_API_ENABLED')) define('CLOUDHUB_OWNERSHIP_API_ENABLED', false);

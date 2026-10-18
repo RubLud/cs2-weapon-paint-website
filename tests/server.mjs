@@ -42,10 +42,10 @@ const disabledConfig=path.join(runtime,"disabled.php");
 fs.writeFileSync(disabledConfig, "<?php define('CLOUDHUB_CORE_ENABLED',true); define('CLOUDHUB_INGEST_ENABLED',false);");
 // Same database and sessions with Stage 6 ownership enforcement on; the main backend keeps it off.
 const enforcedConfig=path.join(runtime,"enforced.php");
-fs.writeFileSync(enforcedConfig, `<?php define('CLOUDHUB_OWNERSHIP_ENFORCED',true); require ${php(config)};`);
+fs.writeFileSync(enforcedConfig, `<?php define('CLOUDHUB_OWNERSHIP_ENFORCED',true); define('CLOUDHUB_OWNERSHIP_API_ENABLED',true); require ${php(config)};`);
 // Enforcement flag on but the shop off: WeaponPaints must behave exactly as before.
 const shopOffConfig=path.join(runtime,"shop-off.php");
-fs.writeFileSync(shopOffConfig, `<?php define('CLOUDHUB_OWNERSHIP_ENFORCED',true); define('CLOUDHUB_SHOP_ENABLED',false); require ${php(config)};`);
+fs.writeFileSync(shopOffConfig, `<?php define('CLOUDHUB_OWNERSHIP_ENFORCED',true); define('CLOUDHUB_OWNERSHIP_API_ENABLED',true); define('CLOUDHUB_SHOP_ENABLED',false); require ${php(config)};`);
 const env = {
   ...process.env,
   CLOUDHUB_CONFIG: config,
