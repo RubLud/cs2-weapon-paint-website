@@ -37,3 +37,8 @@ define('CLOUDHUB_ADMIN_CC_ENABLED', false);
 
 // Enable only after migration 003 on an approved staging environment.
 if (!defined('CLOUDHUB_SOCIAL_ENABLED')) define('CLOUDHUB_SOCIAL_ENABLED', false);
+
+// Stage 5: run migration 004 and bin/cloudhub-shop-catalog.php on approved staging first.
+// SHOP_ENABLED shows the catalog, inventory and history; purchases need the second flag and OWNER-approved prices.
+if (!defined('CLOUDHUB_SHOP_ENABLED')) define('CLOUDHUB_SHOP_ENABLED', false);
+if (!defined('CLOUDHUB_SHOP_PURCHASES_ENABLED')) define('CLOUDHUB_SHOP_PURCHASES_ENABLED', false);

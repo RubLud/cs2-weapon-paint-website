@@ -28,6 +28,9 @@ export function cloudhubCopy(locale) {
         clear: "Wyczyść filtry",
         items: "przedmiotów",
         saved: "Zapisano wyposażenie",
+        shopOwned: "Posiadasz",
+        shopPriceTitle: "Cena w sklepie Cloud Coins. Personalizacja jest darmowa.",
+        shopOwnedTitle: "Masz ten przedmiot na stałe. Personalizacja jest darmowa.",
         saving: "Zapisywanie…",
         loginTitle: "Twój arsenał.\nBez kompromisów.",
         loginSub:
@@ -90,6 +93,9 @@ export function cloudhubCopy(locale) {
         clear: "Clear filters",
         items: "items",
         saved: "Loadout saved",
+        shopOwned: "Owned",
+        shopPriceTitle: "Cloud Coins shop price. Personalization is free.",
+        shopOwnedTitle: "You own this item permanently. Personalization is free.",
         saving: "Saving…",
         loginTitle: "Your arsenal.\nNo compromises.",
         loginSub:
