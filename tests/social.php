@@ -38,7 +38,7 @@ $clear();$comment=$act($a,'comment',['target'=>$b,'body'=>'Owner may delete']);$
 $check($s->comments($b,$b,null)['items']===[],'Profile owner deletes comment');
 $clear();$comment=$act($a,'comment',['target'=>$b,'body'=>'Blocked content']);
 $act($b,'block',['target'=>$a]);$check(!$s->friends($a,$b),'Block removes friendship');
-$check($s->relation($a,$b)['status']==='blocked' && !$s->relation($a,$b)['blocked_by_me'],'Do not allow unblocking another account block');
+$check($s->relation($a,$b)===['status'=>'unavailable','blocked_by_me'=>false] && $s->relation($b,$a)===['status'=>'blocked','blocked_by_me'=>true],'Blocked party sees only an unavailable relation');
 $reject(fn()=>$act($a,'invite',['target'=>$b]));$reject(fn()=>$act($b,'invite',['target'=>$a]));
 $reject(fn()=>$act($a,'comment',['target'=>$b,'body'=>'blocked']),404);
 $check($community->profile($b,$a)===null,'Block masks profile');
@@ -70,7 +70,7 @@ $check($s->notifications($a,null)['items'][0]['kind']==='moderated','Moderation 
 $check(count($s->auditList($owner,null)['items'])>=3,'Deletion audit persisted');
 $db->exec("DELETE FROM cloudhub_player_roles WHERE steamid='$mod' AND role='MODERATOR'");$reject(fn()=>$s->moderation($mod,null));
 $clear();$act($a,'invite',['target'=>$b]);$act($b,'accept',['target'=>$a]);$act($a,'remove',['target'=>$b]);$check(!$s->friends($a,$b),'Remove friend');
-$clear();$act($a,'invite',['target'=>$b]);$act($b,'block',['target'=>$a]);$check($s->relation($a,$b)['status']==='blocked','Block pending invitation');$act($b,'unblock',['target'=>$a]);
+$clear();$act($a,'invite',['target'=>$b]);$act($b,'block',['target'=>$a]);$check($s->relation($b,$a)['status']==='blocked' && $s->relation($a,$b)['status']==='unavailable','Block pending invitation');$act($b,'unblock',['target'=>$a]);
 $workers=function($inputs){$workers=[];foreach($inputs as $in){$p=[];$proc=proc_open([PHP_BINARY,__DIR__.'/social-worker.php',json_encode($in)],[0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']],$p);fclose($p[0]);$workers[]=[$proc,$p];}$out=[];foreach($workers as [$proc,$p]){$json=stream_get_contents($p[1]);$err=stream_get_contents($p[2]);fclose($p[1]);fclose($p[2]);if(proc_close($proc)!==0)throw new RuntimeException($err);$out[]=json_decode($json,true,512,JSON_THROW_ON_ERROR)['status'];}sort($out);return $out;};
 $clear();$check($workers([[$a,'invite',['target'=>$b]],[$a,'invite',['target'=>$b]]])===[200,409],'Concurrent duplicate invites produce one record');$act($a,'cancel',['target'=>$b]);
 $clear();$check($workers([[$a,'invite',['target'=>$b]],[$b,'invite',['target'=>$a]]])===[200,409],'Crossed invitations never duplicate');
@@ -98,6 +98,43 @@ $reject(fn()=>$act($mod,'resolve',['id'=>$comment['id'],'reason'=>'Revoked grant
 $db->exec("INSERT INTO cloudhub_role_permissions(role,permission) VALUES ('ADMIN','moderation.manage')");
 $clear();for($i=0;$i<20;$i++){$id='765611980000008'.str_pad((string)$i,2,'0',STR_PAD_LEFT);$accounts->register($id,'Invite limit fixture');$act($a,'invite',['target'=>$id]);$db->exec("UPDATE cloudhub_social_limits SET last_at=UTC_TIMESTAMP(6)-INTERVAL 10 SECOND WHERE action='invite'");}
 $reject(fn()=>$act($a,'invite',['target'=>$c]),429);
+// Stage 4 review fixes.
+$db->exec("UPDATE cloudhub_social_limits SET window_start=UTC_TIMESTAMP(6)-INTERVAL 2 HOUR,last_at=UTC_TIMESTAMP(6)-INTERVAL 2 HOUR WHERE actor='$a' AND action='invite'");
+$act($a,'invite',['target'=>$c]);$check($s->relation($a,$c)['status']==='sent','Invite window resets after one hour');
+$sent=$s->connections($a,'sent',1);$check($sent['total']===22 && count($sent['items'])===20 && !array_diff(array_map(fn($i)=>$i['relation']['status'],$sent['items']),['sent']),'Connection rows carry their relation');
+$check($s->connections($c,'received',1)['items'][0]['relation']===['status'=>'received','blocked_by_me'=>false],'Received rows carry their relation');
+$check($s->relation($b,$a)['status']==='received','Earlier invitation is still pending');$clear();$act($b,'accept',['target'=>$a]);
+$own=$s->friendList($a,$a);$check($own['items'][0]['relation']===['status'=>'friends','blocked_by_me'=>false],'Own friend list carries relations');
+$act($b,'settings',['friends_visibility'=>'public']);$check(!isset($s->friendList($b,$c)['items'][0]['relation']),'Foreign friend lists carry no relation');
+$act($b,'settings',['invites_policy'=>'disabled']);$check($s->relation($c,$b)['status']==='unavailable','Disabled invitations look like any unavailable relation');$act($b,'settings',['invites_policy'=>'everyone']);
+$check($community->leaderboard(null,$b,'rp',10,1,false,$c)['total']===1,'Leaderboard lists the public player');
+$clear();$act($b,'block',['target'=>$c]);
+$check($community->leaderboard(null,$b,'rp',10,1,false,$c)['total']===0 && $community->leaderboard(null,$b,'rp',10,1,false,$a)['total']===1 && $community->leaderboard(null,$b,'rp',10,1)['total']===1,'Leaderboard hides a blocked pair only for that viewer');
+$check($s->connections($b,'blocked',1)['items'][0]['relation']===['status'=>'blocked','blocked_by_me'=>true],'Blocked rows carry their relation');
+$act($b,'unblock',['target'=>$c]);
+$page=$db->query("SELECT CAST(MIN(id) AS CHAR) FROM cloudhub_profile_comments WHERE author='$a' AND profile_id='$b' AND deleted_at IS NULL")->fetchColumn();
+$reject(fn()=>$act($a,'report',['id'=>$page,'reason'=>'Self report']),422);
+$db->exec("INSERT INTO cloudhub_player_roles(steamid,role) VALUES ('$a','MODERATOR')");
+$act($a,'settings',['profile_visibility'=>'private']);
+$item=$s->comments($b,$c,null)['items'][0];$check($item['badges']['roles']===['MODERATOR'] && $item['badges']['rank']===null && $item['badges']['position']===null && !isset($item['profile_visibility']),'Private author keeps staff badge only');
+$check($s->comments($b,$a,null)['items'][0]['badges']['position']!==null && !$s->comments($b,$a,null)['items'][0]['can_report'] && $s->comments($b,$c,null)['items'][0]['can_report'],'Own comments show full badges and cannot be reported');
+$act($a,'settings',['profile_visibility'=>'public']);$check($s->comments($b,$c,null)['items'][0]['badges']['position']!==null,'Public author shows rank and TOP');
+$db->exec("DELETE FROM cloudhub_player_roles WHERE steamid='$a' AND role='MODERATOR'");
+$db->exec("SET time_zone='+05:00'");$clear();
+$utc=$act($b,'comment',['target'=>$b,'body'=>'UTC timestamp']);
+$drift=(int)$db->query('SELECT ABS(TIMESTAMPDIFF(SECOND,created_at,UTC_TIMESTAMP(6))) FROM cloudhub_profile_comments WHERE id='.(int)$utc['id'])->fetchColumn();
+$db->exec('SET time_zone=@@global.time_zone');$check($drift<60,'Social timestamps are UTC regardless of session time zone');
+$unread=$s->notifications($b,null)['unread'];$check($unread>0,'Fixture has unread notifications');
+$act($c,'read_all',[]);$check($s->notifications($b,null)['unread']===$unread,'read_all only touches own notifications');
+$act($b,'read_all',[]);$check($s->notifications($b,null)['unread']===0,'read_all marks every own notification');
+$reject(fn()=>$act($b,'read_all',['id'=>'1']),422);
+$lock='cloudhub-social-'.substr(hash('sha256',(string)$db->query('SELECT DATABASE()')->fetchColumn()),0,32);
+$db->prepare('SELECT GET_LOCK(?,0)')->execute([$lock]);
+try{$check($workers([[$a,'read_all',[]]])===[503],'Busy social lock returns 503');}finally{$db->prepare('SELECT RELEASE_LOCK(?)')->execute([$lock]);}
+$db->exec("UPDATE cloudhub_schema_migrations SET version='003_hidden_for_test' WHERE version='003_cloudhub_social.sql'");
+try{$check(!CloudHubSocial::active($db) && $community->profile($b,$a)['social_enabled']===false,'Missing migration 003 degrades to Stage 3');}
+finally{$db->exec("UPDATE cloudhub_schema_migrations SET version='003_cloudhub_social.sql' WHERE version='003_hidden_for_test'");}
+$check(CloudHubSocial::active($db) && $community->profile($b,$a)['social_enabled']===true,'Applied migration 003 activates the module');
 // Fixture cleanup, only inside the guarded disposable database.
 foreach(['cloudhub_notifications','cloudhub_comment_reports','cloudhub_profile_comments','cloudhub_friendships','cloudhub_blocks','cloudhub_social_settings','cloudhub_social_limits'] as $t)$db->exec('DELETE FROM '.$t);
 $db->exec("DELETE FROM cloudhub_admin_audit_logs WHERE action LIKE 'social.%'");
