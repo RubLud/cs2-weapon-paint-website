@@ -1,0 +1,51 @@
+name: CI
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  static:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - uses: shivammathur/setup-php@v2
+        with: { php-version: '8.4', extensions: pdo_mysql, curl }
+      - run: pnpm install --frozen-lockfile && pnpm --dir frontend install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm build
+      - run: find backend bin tests -name '*.php' -print0 | xargs -0 -n1 php -l
+  integration:
+    # Disposable MariaDB over a Unix socket only (no TCP), synthetic sessions, no secrets.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - uses: shivammathur/setup-php@v2
+        with: { php-version: '8.4', extensions: pdo_mysql, curl }
+      - name: Start disposable MariaDB (socket only)
+        run: |
+          sudo apt-get update && sudo apt-get install -y mariadb-server
+          sudo systemctl stop mariadb || true
+          sudo mkdir -p /workspace/db && sudo chown -R "$USER" /workspace
+          mariadb-install-db --no-defaults --user="$USER" --datadir=/workspace/db/data --auth-root-authentication-method=socket --skip-test-db
+          mariadbd --no-defaults --datadir=/workspace/db/data --socket=/workspace/db/mysql.sock --pid-file=/workspace/db/mysql.pid --skip-networking --log-error=/workspace/db/error.log &
+          for i in $(seq 30); do [ -S /workspace/db/mysql.sock ] && break; sleep 1; done
+          mariadb --socket=/workspace/db/mysql.sock -e 'SELECT VERSION()'
+      - run: pnpm install --frozen-lockfile && pnpm --dir frontend install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - name: pnpm test (PHP assertions + Playwright API/UI)
+        env:
+          CLOUDHUB_TEST_SOCKET: /workspace/db/mysql.sock
+          CLOUDHUB_TEST_DB_USER: runner
+        run: pnpm test
+      - if: failure()
+        run: tail -n 100 /workspace/db/error.log || true
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with: { name: test-results, path: test-results, retention-days: 7, if-no-files-found: ignore }
