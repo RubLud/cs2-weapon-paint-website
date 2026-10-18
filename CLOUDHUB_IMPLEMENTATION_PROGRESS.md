@@ -11,7 +11,7 @@ Nowa specyfikacja: [docs/CLOUDHUB_NOWA_PELNA_SPECYFIKACJA.md](docs/CLOUDHUB_NOWA
 | Profile, ranking, OWNER CC | GOTOWE | PR #5. Profil wymaga MVP, postępu rangi i osiągnięć (§6). |
 | Społeczność | GOTOWE, WYMAGA TESTÓW na stagingu | PR #6 + #7, CI zielone, czeka na zgodę na merge do master |
 | Sklep CC i ekwipunek (Etap 5) | GOTOWE, WYMAGA TESTÓW na stagingu | PR #8 (RubLud) do `cloudhub-stage4-social`, CI zielone (81 asercji sklepu, 49 cennika, 24/24 Playwright). Cennik testowy, sprzedaż niezatwierdzona. |
-| Własność w WeaponPaints (Etap 6) | CZĘŚCIOWO GOTOWE, WYMAGA TESTÓW | Gałąź `cloudhub-stage6-ownership` (lokalnie): migracja 005, kontrola zapisów WWW, strażnik bazy dla wyposażenia czytanego przez serwer CS2, snapshot stanu, audyt. Testy na bazie i Playwright czekają na CI. Szczegóły: [docs/OWNERSHIP_STAGE6.pl.md](docs/OWNERSHIP_STAGE6.pl.md). |
+| Własność w WeaponPaints (Etap 6) | CZĘŚCIOWO GOTOWE, WYMAGA TESTÓW na stagingu | PR #9 (RubLud) do `cloudhub-stage5-shop`, CI zielone: 407 asercji PHP, 28/28 Playwright. Migracja 005, kontrola zapisów WWW, strażnik bazy, snapshot stanu, audyt. Otwarte: natychmiastowe nałożenie skina z menu w grze. Szczegóły: [docs/OWNERSHIP_STAGE6.pl.md](docs/OWNERSHIP_STAGE6.pl.md). |
 | Redesign | NIEZROBIONE | po sklepie i ekwipunku |
 | Logo | NIEZROBIONE | wymaga zatwierdzenia propozycji |
 | Stopka „Designed by RUB LUD” | NIEZROBIONE | licencja MIT sprawdzona: `LICENSE` zostaje, link wizualny może zniknąć |
@@ -23,7 +23,7 @@ Nowa specyfikacja: [docs/CLOUDHUB_NOWA_PELNA_SPECYFIKACJA.md](docs/CLOUDHUB_NOWA
 
 ## Etap 6 — własność w WeaponPaints (18 października 2026)
 
-Lokalna gałąź `cloudhub-stage6-ownership` z `cloudhub-stage5-shop` (`5258473`). Bez push, merge, wdrożenia, migracji produkcyjnej i zmian na serwerze gry. Szczegóły: [docs/OWNERSHIP_STAGE6.pl.md](docs/OWNERSHIP_STAGE6.pl.md).
+Gałąź `cloudhub-stage6-ownership` z `cloudhub-stage5-shop` (`5258473`), PR #9 w RubLud do `cloudhub-stage5-shop`. Bez merge, wdrożenia, migracji produkcyjnej i zmian na serwerze gry. Szczegóły: [docs/OWNERSHIP_STAGE6.pl.md](docs/OWNERSHIP_STAGE6.pl.md).
 
 - Migracja addytywna `005_cloudhub_ownership.sql`: snapshoty OWNER i własność sprzed egzekwowania. `wp_*` bez zmian.
 - `CloudHubOwnership`: posiadanie z zakupu lub snapshotu. Darmowe są personalizacja, domyślne wykończenia, domyślny nóż i domyślne rękawice. Model noża lub rękawic odblokowuje posiadanie dowolnego ich wykończenia. Nieznane połączenia są odrzucane.
@@ -33,7 +33,11 @@ Lokalna gałąź `cloudhub-stage6-ownership` z `cloudhub-stage5-shop` (`5258473`
 - Strażnik bazy: triggery na `wp_player_skins/knife/gloves`. Nowy wybór nieposiadanego przedmiotu z dowolnego źródła (menu w grze, SQL) zapisuje się jako domyślny. Aktualizacje bez zmiany przedmiotu (StatTrak) przechodzą. Instalacja wymaga aktywnego egzekwowania i robi świeży snapshot.
 - Sklep: przedmioty ze snapshotu jako „Posiadasz”, w ekwipunku, bez podwójnego zakupu. Konfigurator przy egzekwowaniu: „Kup: N CC” lub „Niedostępny”, podgląd bez zmian.
 - Plugin WeaponPaints (kod sprawdzony do odczytu): `!skins`, `!knife`, `!gloves` zapisują do bazy z pominięciem WWW. Zapis blokuje strażnik bazy. Do końca sesji gracz widzi wybór w pamięci pluginu, więc rekomendacja: puste `CommandSkinSelection`, `CommandKnife`, `CommandGlove`. Wymaga zgody i weryfikacji wdrożonej wersji.
-- Weryfikacja lokalna PASS: lint, build, `php -l`, 49 asercji pricing, `git diff --check`. Niezweryfikowane lokalnie (brak MariaDB i `pdo_mysql` na Windows): `tests/ownership.php`, `tests/ownership.spec.js` (4 testy) i pełna regresja. Wymagają CI, czyli push za osobną zgodą.
+- CI PASS (run 39160503254, commit `14b1622`): `static` i `integration`.
+  - 407 asercji PHP na MariaDB: foundations 31, rounds 50, community 29, admin 24, social 90, shop-pricing 49, shop 81, ownership 53. Ownership obejmuje triggery sprawdzane prawdziwym SQL pluginu WeaponPaints.
+  - Playwright 28/28, w tym 4 testy własności: API, UI, bezpieczeństwo, wyłączony sklep. Pozostałe 24 testy to regresja poprzednich etapów.
+- Pierwszy run (39160151104) wykrył wyścig w teście Shop UI z Etapu 5: spóźnione `Set-Cookie` przywracało poprzednią sesję. Poprawiony test, bez zmian w aplikacji.
+- Otwarte: menu w grze (`!skins`, `!knife`, `!gloves`) nakłada wybór natychmiast w pamięci pluginu. Strażnik bazy zatrzymuje zapis, ale gracz widzi skin do końca sesji. Plan: [docs/OWNERSHIP_STAGE6.pl.md](docs/OWNERSHIP_STAGE6.pl.md), sekcja o menu w grze.
 
 ## Etap 5 — sklep Cloud Coins i ekwipunek (18 października 2026)
 

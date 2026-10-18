@@ -100,6 +100,63 @@ Sprawdzono tylko do odczytu Nereziel/cs2-WeaponPaints w commicie `6b1039d63042b0
 - Zanim menu zostaną wyłączone, strażnik bazy pilnuje zapisu, a `--audit` wykrywa obejście.
 - Nie wykonano żadnej zmiany konfiguracji ani restartu serwera CS2.
 
+## Menu w grze: natychmiastowe nałożenie (analiza kodu, 18.10.2026)
+
+Sprawdzone tylko do odczytu:
+
+- **WeaponPaints:** Nereziel/cs2-WeaponPaints `6b1039d` = aktualny `main` = release `build-466` (04.10.2026), `VERSION` **3.3a**, licencja **GPL-3.0**. Zależności: CounterStrikeSharp.API 1.0.376, .NET 10.
+- **MenuManager:** interfejs `IMenuApi` (NickFox007/MenuManagerCS2).
+- **Wersja na produkcyjnym serwerze nie została potwierdzona.** Przed jakąkolwiek zmianą trzeba ją odczytać, np. z `css_plugins list` albo z pliku `VERSION` przy pluginie.
+
+### Co robi plugin
+
+`Commands.cs`: handlery menu `!skins` (`handleSkinSelection`), `!knife` (`handleGive`) i `!gloves` (`handleGloveSelection`) działają w tej kolejności:
+
+1. zmiana stanu w pamięci (`GPlayerWeaponsInfo`, `GPlayersKnife`, `GPlayersGlove`);
+2. natychmiastowe nałożenie (`RefreshWeapons`, `GivePlayerGloves`);
+3. dopiero potem asynchroniczny zapis do bazy (`Task.Run(... Sync*ToDatabase)`).
+
+Strażnik bazy działa dopiero w kroku 3. Dlatego gracz widzi wybrany przedmiot do ponownego wczytania stanu z bazy (`OnClientFullConnect` lub `!wp`, które wywołują `GetPlayerData`).
+
+### Czy da się to zatrzymać bez forka? Nie, w sposób bezpieczny
+
+- **API pluginu:** WeaponPaints nie rejestruje żadnej `PluginCapability`, nie ma zdarzeń ani metod publicznych. Stan i handlery są `internal` albo prywatnymi lambdami. Plugin tylko *konsumuje* `PluginCapability<IMenuApi>("menu:nfcore")`.
+- **MenuManager:** `IMenuApi` udostępnia wyłącznie `GetMenu`, `GetMenuForcetype`, `CloseMenu`, `GetMenuType`, `HasOpenedMenu`. Brak zdarzenia wyboru opcji i brak sposobu na opakowanie cudzego menu.
+- **CounterStrikeSharp:**
+  - `AddCommandListener` może przechwycić tylko polecenie (np. `css_skins`), czyli otwarcie menu. Wybór opcji obsługuje MenuManager, więc z tego poziomu da się menu jedynie całkowicie zablokować. To jest sprzeczne z wymaganiem zachowania menu.
+  - Hooki `VirtualFunction` dotyczą funkcji silnika gry, nie metod innej wtyczki.
+- **Odrzucone obejścia:**
+  - **Łatanie w czasie działania (Harmony, refleksja do `internal static` stanu):** w praktyce nieoficjalny fork, kruchy przy każdej aktualizacji i niewspierany przez CounterStrikeSharp.
+  - **Korekta po fakcie (zdejmowanie atrybutów broni):** konflikt z WeaponPaints, które ponownie nakłada skin, i ryzyko błędów entity.
+
+### Bezpieczny wariant: minimalny fork + kontrakt w pluginie CloudHub
+
+1. **Kontrakt (osobna mała biblioteka `CloudHub.Ownership.Contracts`, MIT):**
+   - `interface ICloudHubOwnership { bool IsReady(ulong steamId); bool CanUse(ulong steamId, int defindex, int paint); bool CanUseKnife(ulong steamId, string knife); bool CanUseGlove(ulong steamId, int defindex, int paint); void Refresh(ulong steamId); }`
+   - Udostępniany przez plugin CloudHub jako `PluginCapability<ICloudHubOwnership>("cloudhub:ownership")`. Ten sam mechanizm, którego WeaponPaints już używa dla MenuManager.
+2. **Plugin CloudHub (nasz kod):**
+   - pamięć podręczna posiadania per gracz, ładowana asynchronicznie przy wejściu i odświeżana przy otwarciu menu;
+   - odpowiedzi z bazy ładowane w tle, nigdy blokująco na wątku gry;
+   - źródło: ta sama reguła co strażnik bazy (zakup, snapshot, darmowe przedmioty domyślne, model noża lub rękawic przez dowolne posiadane wykończenie). Najprościej przez widok SQL tylko do odczytu (np. `cloudhub_owned_items`, przyszła migracja) albo endpoint HMAC tylko do odczytu.
+3. **Fork WeaponPaints (`RubLud/cs2-WeaponPaints`, GPL-3.0 zachowana, autorstwo upstream zachowane, źródła publiczne):**
+   - około 4 miejsc w `Commands.cs`: na początku `handleSkinSelection`, `handleGive` i `handleGloveSelection`, *przed* zmianą pamięci, wywołanie `CanUse…`;
+   - przy odmowie: komunikat „Kup w sklepie CloudHub” i `return`, bez zmiany pamięci, bez `RefreshWeapons` i bez zapisu do bazy;
+   - opcjonalnie: lista skinów w podmenu filtrowana per gracz albo oznaczona kłódką. Podmenu skinów jest budowane per gracz w `handleWeaponSelection`, więc to możliwe. Menu noży i rękawic jest globalne, dlatego tam działa kontrola w handlerze;
+   - nowa opcja konfiguracji `CloudHubOwnership` (domyślnie `false`): bez niej fork działa identycznie jak upstream;
+   - gdy `true`, a capability nie jest dostępne lub dane gracza nie są jeszcze wczytane: **fail-closed** dla wykończeń płatnych; przedmioty domyślne zawsze działają;
+   - personalizacja (`!stattrak`), agenci, muzyka i przypinki bez zmian;
+   - `GiveRandomSkin` i `GiveRandomKnife` pozostają `false`. Przy włączeniu fork musi je objąć tą samą kontrolą.
+4. **Utrzymanie:**
+   - fork jako mała łatka nad tagiem upstream (`build-466`), z plikiem `CLOUDHUB_PATCH.md` opisującym zmiany;
+   - przy każdym nowym buildzie upstream: rebase, build w GitHub Actions (`dotnet build`, testy jednostkowe reguł w kontrakcie);
+   - przed wdrożeniem test na serwerze testowym, nie produkcyjnym.
+5. **Warstwy pozostają:** API WWW (403) i strażnik bazy (triggery) działają niezależnie od forka. Gdy fork zawiedzie, w bazie i tak zostaje stan domyślny.
+
+### Plan do czasu decyzji
+
+- Komendy `!skins`, `!knife` i `!gloves` na produkcji pozostają bez zmian (decyzja OWNER).
+- Po włączeniu Etapu 6 bez forka luka ogranicza się do jednej sesji. Zapis i każde ponowne wczytanie dają stan domyślny, a `--audit` wykrywa przypadki.
+
 ## Kolejność wdrożenia (każdy krok za zgodą OWNER)
 
 1. Kopia zapasowa bazy.
